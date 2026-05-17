@@ -1,0 +1,80 @@
+---
+name: harness-pilot
+description: TDD ハーネスの操作とワークフロー実行を支援する配布用 skill。使用場面: ハーネスで仕様策定、実装、レビュー、運用案内。トリガー: "/harness-pilot", "ハーネスで", "ハーネスの"
+---
+
+# Harness Pilot
+
+この skill は `.harness/` 配下のハーネス全体を操作するための運用ガイド。
+まず `/.harness/README.md` を読み、必要に応じて `/.harness/docs/setup-guide.md` と `/.harness/docs/architecture.md` を追加で読むこと。
+
+## 最初に確認すること
+
+1. 実行入口は `./.harness/bin/harness`
+2. 実設定は `.harness/config/harness.yml`
+3. 追跡対象のサンプル設定は `.harness/config/harness.example.yml`
+4. 配布用 skill 正本は `.harness/resources/skills/`
+5. 直接利用のための `.codex/skills/` と `.claude/skills/` への展開は `./.harness/bin/harness sync-skills`
+
+## AI への基本動作
+
+- ハーネスの使い方を質問されたら、まず `/.harness/README.md` を根拠に答える
+- ハーネス実行を依頼されたら、必要なら README と setup-guide を読み直してから適切なコマンドを選ぶ
+- plan / spec / test_cases / component_spec / figma_cache の前提が不足している場合は、足りない入力を具体的に指摘する
+- `.harness/resources/` は配布物、`.harness/config/harness.yml` と `.harness/logs/` と `.harness/reviews/` はローカル生成物として扱う
+
+## コマンド一覧
+
+| コマンド | 用途 |
+|---|---|
+| `./.harness/bin/harness init` | セットアップガイド表示 |
+| `./.harness/bin/harness sync-skills` | 配布用 skill を `.codex/skills/` と `.claude/skills/` に同期 |
+| `./.harness/bin/harness design <category/name> "<requirements>"` | 仕様書・テストケース生成 |
+| `./.harness/bin/harness impl <plan-file> [--resume] [--flow full\|light] [--no-interactive]` | TDD 実装 |
+| `./.harness/bin/harness component <plan-file> [--flow full\|light] [--no-interactive]` | Component + Story 実装 |
+| `./.harness/bin/harness page <plan-file> [--flow full\|light] [--no-interactive]` | Page 実装 + レビュー + browser verify |
+| `./.harness/bin/harness benchmark-summary <log-dir> [<log-dir>]` | ベンチマーク比較サマリ |
+| `./.harness/bin/harness benchmark-diagnose <log-dir> [<log-dir>]` | ベンチマーク診断 |
+
+## 典型フロー
+
+### バックエンド
+1. `design` で仕様書とテストケースを生成
+2. 人間が内容を確認し、ready にする
+3. plan を用意する
+4. `impl` を実行する
+
+### フロントエンド
+1. 仕様書・コンポーネント定義書・Figma キャッシュ・必要ならテストケースを ready にする
+2. `/harness-plan-fe <spec-path>` で plan 群を生成する
+3. `component` → `impl` → `page` の順で実行する
+
+## plan の見方
+
+- `type`: `component` / `impl` / `page`
+- `profile`: `backend` / `frontend`
+- `scope`: 実装責務の境界
+- `spec`: 仕様書
+- `test_cases`: Logic / Page で必要
+- `component_spec`: Component / Page で必要
+- `figma_cache`: Component / Page で必要
+- `msw`: Logic / Page で API モックが必要か
+
+plan の詳細フォーマットは `/.harness/README.md` を正本とする。
+
+## skill と設定の関係
+
+- `profile.context.defaultSkills` と `profile.context.stepOverrides.<step>.skills` が runtime skill 名
+- ハーネス内部実行時の探索順:
+  1. `.codex/skills/<name>/SKILL.md`
+  2. `.harness/resources/skills/<name>/SKILL.md`
+  3. `.claude/skills/<name>/SKILL.md`
+- repo 固有 override が不要なら `.harness/resources/skills/` を正本として扱う
+
+## よくある誤り
+
+- `./.harness/bin/harness` ではなく旧パスを叩く
+- `.harness/config/harness.example.yml` をそのまま実設定だと思う
+- `component` フローに MSW を持ち込む
+- Page フローで Logic を新規実装しようとする
+- `.harness/logs/` や `.harness/reviews/` を配布物として commit しようとする

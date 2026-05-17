@@ -1,0 +1,6 @@
+/config/harness.yml
+/logs/*
+!/logs/README.md
+/reviews/*
+!/reviews/README.md
+/node_modules/

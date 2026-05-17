@@ -1,0 +1,195 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { HarnessLogger } from "../../infrastructure/logging/logger.ts";
+import { ReviewOrchestrator } from "./review-orchestrator.ts";
+import type { ReviewIssue, ReviewResult } from "../../domain/model/types.ts";
+import { DriftError } from "../../domain/model/types.ts";
+
+function createOrchestrator() {
+  const root = mkdtempSync(join(tmpdir(), "harness-review-more-"));
+  const specPath = join(root, "spec.md");
+  writeFileSync(specPath, "# spec\n", "utf-8");
+  const logger = new HarnessLogger("review-more", { baseDir: root });
+  const registry = {
+    getConfig() {
+      return { templates: {} };
+    },
+    getRunner() {
+      return {
+        async run() {
+          return { text: "{\"checklist\":[{\"item\":\"ok\",\"verdict\":\"pass\",\"evidence\":\"done\"}],\"issues\":[]}" };
+        },
+      };
+    },
+    isStepSkipped() {
+      return false;
+    },
+    getFallbackRunner() {
+      return this.getRunner();
+    },
+  } as any;
+  const lintGuard = { async check() {} } as any;
+  return { root, specPath, orchestrator: new ReviewOrchestrator(logger, lintGuard, root, registry) };
+}
+
+function major(description: string): ReviewIssue {
+  return { file: "target.ts", severity: "major", description };
+}
+
+function minor(description: string): ReviewIssue {
+  return { file: "target.ts", severity: "minor", description };
+}
+
+test("parseReviewResult accepts fenced JSON and invalid issue shapes fail closed", () => {
+  const { orchestrator } = createOrchestrator();
+  const parsed = (orchestrator as any).parseReviewResult(
+    "reviewer",
+    "```json\n{\"checklist\":[{\"item\":\"x\",\"verdict\":\"pass\",\"evidence\":\"ok\"}],\"issues\":[]}\n```",
+  ) as ReviewResult;
+  assert.equal(parsed.isLgtm, true);
+
+  const invalid = (orchestrator as any).parseReviewResult(
+    "reviewer",
+    "{\"checklist\":[{\"item\":\"x\",\"verdict\":\"pass\",\"evidence\":\"ok\"}],\"issues\":[{\"severity\":\"major\",\"file\":\"x\"}]}",
+  ) as ReviewResult;
+  assert.equal(invalid.isLgtm, false);
+  assert.equal(invalid.issues[0]?.severity, "critical");
+});
+
+test("reconcileReviews keeps major issues and only confirmed minor issues", () => {
+  const { orchestrator } = createOrchestrator();
+  const issues = orchestrator.reconcileReviews(
+    { reviewer: "a", checklist: [], issues: [major("fix me"), minor("same minor"), minor("single")], isLgtm: false },
+    { reviewer: "b", checklist: [], issues: [minor("same minor")], isLgtm: false },
+  );
+
+  assert.equal(issues.some((issue) => issue.description === "fix me"), true);
+  assert.equal(issues.filter((issue) => issue.description === "same minor").length, 2);
+  assert.equal(issues.some((issue) => issue.description === "single"), false);
+});
+
+test("runPageReview accepts clean pages, escalates parse failures, and can accept repeated minors", async () => {
+  const { orchestrator, specPath } = createOrchestrator();
+  const page = orchestrator as any;
+  page.pageDesignReview = async () => ({ reviewer: "design", checklist: [], issues: [], isLgtm: true });
+  page.pageBehaviorReview = async () => ({ reviewer: "behavior", checklist: [], issues: [], isLgtm: true });
+  page.pageCodeReview = async () => ({ reviewer: "code", checklist: [], issues: [], isLgtm: true });
+  const lgtmResults = await orchestrator.runPageReview({
+    targetFiles: ["target.ts"],
+    specPath,
+    componentSpecPath: specPath,
+    dependenciesText: "",
+    figmaSlice: "",
+    browserScenariosText: "",
+    criteriaPaths: [],
+    scopeAllowedTools: [],
+  } as any);
+  assert.equal(lgtmResults.length, 3);
+
+  const { orchestrator: parseFail, specPath: parseSpec } = createOrchestrator();
+  const failing = parseFail as any;
+  failing.pageDesignReview = async () => ({ reviewer: "design", checklist: [], issues: [{ file: "", severity: "critical", description: "parse" }], isLgtm: false });
+  failing.pageBehaviorReview = async () => ({ reviewer: "behavior", checklist: [], issues: [], isLgtm: true });
+  failing.pageCodeReview = async () => ({ reviewer: "code", checklist: [], issues: [], isLgtm: true });
+  await assert.rejects(
+    () => parseFail.runPageReview({
+      targetFiles: ["target.ts"],
+      specPath: parseSpec,
+      componentSpecPath: parseSpec,
+      dependenciesText: "",
+      figmaSlice: "",
+      browserScenariosText: "",
+      criteriaPaths: [],
+      scopeAllowedTools: [],
+    } as any),
+    DriftError,
+  );
+
+  const { orchestrator: minorFlow, specPath: minorSpec } = createOrchestrator();
+  const minorAny = minorFlow as any;
+  let pageFixes = 0;
+  let judgeCalls = 0;
+  let reviewCycles = 0;
+  minorAny.pageDesignReview = async () => ({ reviewer: "design", checklist: [], issues: [minor("tiny")], isLgtm: false });
+  minorAny.pageBehaviorReview = async () => ({ reviewer: "behavior", checklist: [], issues: [], isLgtm: true });
+  minorAny.pageCodeReview = async () => {
+    reviewCycles++;
+    return { reviewer: "code", checklist: [], issues: [], isLgtm: true };
+  };
+  minorAny.applyFixes = async () => { pageFixes++; };
+  minorAny.generateJudgmentSummary = async () => "fixed";
+  minorAny.judgeMinorAcceptance = async () => {
+    judgeCalls++;
+    return { safe: true, reason: "acceptable" };
+  };
+  await minorFlow.runPageReview({
+    targetFiles: ["target.ts"],
+    specPath: minorSpec,
+    componentSpecPath: minorSpec,
+    dependenciesText: "",
+    figmaSlice: "",
+    browserScenariosText: "",
+    criteriaPaths: [],
+    scopeAllowedTools: [],
+    getFileDiff: async () => "",
+  } as any);
+  const records = minorFlow.getRecords();
+  assert.equal(reviewCycles, 2);
+  assert.equal(pageFixes, 1);
+  assert.equal(judgeCalls, 1);
+  assert.equal(records.at(-1)?.decision, "accepted");
+  assert.equal(records.at(-1)?.reviewer, "page_review");
+});
+
+test("reviewStep fixes major issues and can retry unsafe minor issues", async () => {
+  const { orchestrator, specPath } = createOrchestrator();
+  const anyOrchestrator = orchestrator as any;
+  const params = {
+    targetFiles: ["target.ts"],
+    scopeAllowedTools: [],
+    specPath,
+    getFileDiff: async () => "",
+    runTests: async () => {},
+    reviewMode: "implementation",
+  };
+
+  let majorCalls = 0;
+  anyOrchestrator.applyFixes = async () => { majorCalls++; };
+  anyOrchestrator.generateJudgmentSummary = async () => "summary";
+  const fixed = await anyOrchestrator.reviewStep(
+    async () => {
+      majorCalls++;
+      return majorCalls >= 2
+        ? { reviewer: "self_quality", checklist: [], issues: [], isLgtm: true }
+        : { reviewer: "self_quality", checklist: [], issues: [major("bad")], isLgtm: false };
+    },
+    params,
+  );
+  assert.equal(fixed.isLgtm, true);
+
+  const { orchestrator: minorRetry, specPath: minorSpec } = createOrchestrator();
+  const anyMinor = minorRetry as any;
+  let calls = 0;
+  anyMinor.applyFixes = async () => {};
+  anyMinor.judgeMinorAcceptance = async () => ({ safe: false, reason: "retry once" });
+  const result = await anyMinor.reviewStep(
+    async () => {
+      calls++;
+      return calls >= 3
+        ? { reviewer: "self_quality", checklist: [], issues: [], isLgtm: true }
+        : { reviewer: "self_quality", checklist: [], issues: [minor("nit")], isLgtm: false };
+    },
+    {
+      targetFiles: ["target.ts"],
+      scopeAllowedTools: [],
+      specPath: minorSpec,
+      getFileDiff: async () => "",
+      runTests: async () => {},
+      reviewMode: "implementation",
+    },
+  );
+  assert.equal(result.isLgtm, true);
+});

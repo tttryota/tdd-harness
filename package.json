@@ -1,0 +1,20 @@
+{
+  "name": "obsidian-harness",
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "find src -name '*.test.ts' -print0 | xargs -0 node --experimental-test-coverage --test --test-coverage-lines=90 --test-coverage-branches=80"
+  },
+  "dependencies": {
+    "yaml": "^2.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.8"
+  }
+}
