@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { HarnessLogger } from "../../infrastructure/logging/logger.ts";
 import { ReviewOrchestrator } from "./review-orchestrator.ts";
 import type { ReviewIssue, ReviewResult } from "../../domain/model/types.ts";
+import type { LintViolation } from "../../domain/model/types.ts";
 import { DriftError } from "../../domain/model/types.ts";
 
 function createOrchestrator() {
@@ -192,4 +193,67 @@ test("reviewStep fixes major issues and can retry unsafe minor issues", async ()
     },
   );
   assert.equal(result.isLgtm, true);
+});
+
+test("applyFixes reuses lint_fix during post-fix lint retries", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-review-lint-fix-"));
+  const specPath = join(root, "spec.md");
+  writeFileSync(specPath, "# spec\n", "utf-8");
+  const logger = new HarnessLogger("review-lint-fix", { baseDir: root });
+  const runnerCalls: Array<{ prompt: string; allowedTools?: string[] }> = [];
+  const registry = {
+    getConfig() {
+      return { templates: {} };
+    },
+    getRunner() {
+      return {
+        async run(request: { prompt: string; allowedTools?: string[] }) {
+          runnerCalls.push({ prompt: request.prompt, allowedTools: request.allowedTools });
+          return { text: "{\"checklist\":[{\"item\":\"ok\",\"verdict\":\"pass\",\"evidence\":\"done\"}],\"issues\":[]}" };
+        },
+      };
+    },
+    isStepSkipped() {
+      return false;
+    },
+    getFallbackRunner() {
+      return this.getRunner();
+    },
+  } as any;
+
+  let lintCheckCalls = 0;
+  let rescanCalls = 0;
+  const lintGuard = {
+    async check(_files: string[], options?: { claudeFix?: (violations: LintViolation[]) => Promise<void>; rescanFiles?: () => Promise<string[]> }) {
+      lintCheckCalls++;
+      await options?.claudeFix?.([{ tool: "ruff", file: "src/file.py", line: 12, message: "BLE001: blind except" }]);
+      await options?.rescanFiles?.();
+    },
+  } as any;
+
+  const orchestrator = new ReviewOrchestrator(logger, lintGuard, root, registry);
+  const anyOrchestrator = orchestrator as any;
+  anyOrchestrator.executeRun = async (step: string, prompt: string) => {
+    runnerCalls.push({ prompt: `${step}:${prompt}` });
+  };
+
+  await anyOrchestrator.applyFixes(
+    [{ file: "src/file.py", line: 10, severity: "major", description: "fix review issue" }],
+    {
+      targetFiles: ["src/file.py"],
+      scopeAllowedTools: ["Write(src/*)"],
+      specPath,
+      reviewMode: "implementation",
+      rescanFiles: async () => {
+        rescanCalls++;
+        return ["src/file.py", "src/extra.py"];
+      },
+      runTests: async () => {},
+    },
+  );
+
+  assert.equal(lintCheckCalls, 1);
+  assert.equal(rescanCalls, 2);
+  assert.equal(runnerCalls.some((call) => /BLE001: blind except/.test(call.prompt)), true);
+  assert.deepEqual(runnerCalls.at(-1)?.allowedTools, ["Write(src/*)"]);
 });

@@ -6,6 +6,7 @@ import type { FlowStep } from "../../domain/model/steps.ts";
 import { FLOW_STEP } from "../../domain/model/steps.ts";
 import { DriftError, HarnessError, RunnerRateLimitError, ESCALATION_LEVEL, EVENT } from "../../domain/model/types.ts";
 import type { ReviewChecklistEntry, ReviewIssue, ReviewResult, ReviewRecord } from "../../domain/model/types.ts";
+import type { LintViolation } from "../../domain/model/types.ts";
 import { loadTemplate, renderTemplate } from "../../infrastructure/templates/templates.ts";
 import { applyStepContext } from "../../infrastructure/runners/step-context.ts";
 import type { Logger } from "../ports/logger.ts";
@@ -885,7 +886,38 @@ ${constraint}`;
 
     // 対象ファイルが空ならリントをスキップ（全体に広がるのを防止）
     if (params.targetFiles.length > 0) {
-      await this.lintGuard.check(params.targetFiles);
+      await this.lintGuard.check(params.targetFiles, {
+        claudeFix: async (violations: LintViolation[]) => {
+          const lintIssueList = violations
+            .map((violation, idx) =>
+              `${idx + 1}. ${violation.tool}: ${violation.file}:${violation.line} - ${violation.message}`,
+            )
+            .join("\n");
+          const runner = this.registry.getRunner(FLOW_STEP.LINT_FIX);
+          await runner.run(
+            applyStepContext(
+              {
+                prompt: `以下のリンター違反を修正してください。自動修正できなかった違反です。
+
+## 違反一覧
+${lintIssueList}
+
+## 制約
+- 指摘された違反のみ修正する
+- 既存のロジックや振る舞いを不必要に変更しない`,
+                allowedTools: params.scopeAllowedTools,
+                cwd: this.projectRoot,
+                timeoutMs: DEFAULT_TIMEOUT_MS,
+              },
+              this.profile,
+              FLOW_STEP.LINT_FIX,
+              this.projectRoot,
+            ),
+            this.logger,
+          );
+        },
+        rescanFiles: params.rescanFiles,
+      });
     }
     // テストレビュー時は実装が未生成のためテスト実行をスキップ
     if (params.reviewMode !== "test" && params.runTests) {
