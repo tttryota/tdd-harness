@@ -24,6 +24,12 @@ profiles:
       page_review_code: codex
       page_browser_verify: codex
     lint: [ruff, mypy]
+    # RED フェーズでのみ一時的に緩和したい lint がある場合:
+    # lint:
+    #   - name: ruff
+    #     args: ["--ignore", "BLE001"]
+    #   - name: mypy
+    #     args: ["--disable-error-code", "call-arg"]
     test: pytest
     toolRoot: backend
     criteriaPreset: backend

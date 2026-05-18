@@ -194,7 +194,7 @@ async function resolveFlowResources(
   const profileName = plan.profile ?? deps.inferProfile(config);
   const profile = deps.resolveProfile(config, profileName);
   const effectiveFlow = parseFlowArg(args) ?? profile.flow;
-  const lintAdapters = profile.lint.map(deps.resolveLintAdapter);
+  const lintAdapters = profile.lint.map((tool) => deps.resolveLintAdapter(tool.name, tool.args));
   const testAdapter = deps.resolveTestAdapter(profile.test);
   const allAdapters: BaseAdapter[] = [...lintAdapters, testAdapter];
   const boundary = deps.createProjectBoundary(projectRoot, profile, allAdapters);

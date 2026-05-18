@@ -336,14 +336,23 @@ export const TEST_REGISTRY: Record<string, TestAdapter> = {
   vitest: VITEST_ADAPTER,
 };
 
-export function resolveLintAdapter(name: string): LintAdapter {
+export function resolveLintAdapter(name: string, userArgs: string[] = []): LintAdapter {
   const adapter = LINT_REGISTRY[name];
   if (!adapter) {
     throw new HarnessError(
       `未知の lint ツール: "${name}"。利用可能: ${Object.keys(LINT_REGISTRY).join(", ")}`,
     );
   }
-  return adapter;
+  if (userArgs.length === 0) {
+    return adapter;
+  }
+  return {
+    ...adapter,
+    resolveConfigArgs: (toolRoot) => [
+      ...(adapter.resolveConfigArgs?.(toolRoot) ?? []),
+      ...userArgs,
+    ],
+  };
 }
 
 export function resolveTestAdapter(name: string): TestAdapter {

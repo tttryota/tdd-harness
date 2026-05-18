@@ -71,6 +71,10 @@ test("loadConfig resolves profile-centric runner mapping and context", () => {
   assert.equal(config.profiles.backend.flow, "full");
   assert.equal(config.profiles.backend.fallbackRunner, "codex");
   assert.equal(config.profiles.backend.steps.impl_external_review, "claude");
+  assert.deepEqual(config.profiles.backend.lint, [
+    { name: "ruff", args: [] },
+    { name: "mypy", args: [] },
+  ]);
   assert.deepEqual(config.profiles.backend.designLayout, {
     specDir: "docs/spec/{{category}}",
     testCaseDir: "tests/test-cases/{{category}}",
@@ -200,6 +204,16 @@ test("loadConfig rejects invalid profile field shapes", () => {
       name: "non-array lint",
       body: baseYaml().replace("    lint: [ruff, mypy]", "    lint: ruff"),
       pattern: /\.lint は配列で指定してください/,
+    },
+    {
+      name: "invalid lint object",
+      body: baseYaml().replace("    lint: [ruff, mypy]", "    lint:\n      - {}\n"),
+      pattern: /\.lint\[\]\.name は空でない文字列/,
+    },
+    {
+      name: "invalid lint args shape",
+      body: baseYaml().replace("    lint: [ruff, mypy]", "    lint:\n      - name: ruff\n        args: bad\n"),
+      pattern: /\.lint\[\]\.args は文字列配列/,
     },
     {
       name: "non-string test",
@@ -436,7 +450,10 @@ runners:
   );
 
   const config = loadConfig(workspace);
-  assert.deepEqual(config.profiles.backend.lint, ["ruff", "mypy"]);
+  assert.deepEqual(config.profiles.backend.lint, [
+    { name: "ruff", args: [] },
+    { name: "mypy", args: [] },
+  ]);
   assert.equal(config.profiles.backend.test, "pytest");
   assert.deepEqual(config.profiles.backend.designLayout, {
     specDir: "docs/spec/{{category}}",
@@ -550,4 +567,23 @@ test("loadConfig preserves explicit designLayout overrides", () => {
     specDir: "docs/spec/backend/{{category}}",
     testCaseDir: "backend/{{category}}/docs/test-cases",
   });
+});
+
+test("loadConfig preserves explicit lint args overrides", () => {
+  const workspace = mkdtempSync(join(tmpdir(), "harness-config-lint-args-"));
+  writeConfig(
+    workspace,
+    baseYaml().replace(
+      "    lint: [ruff, mypy]\n",
+      "    lint:\n      - name: ruff\n        args: [--ignore, BLE001]\n      - mypy\n      - name: mypy\n        args: [--disable-error-code, call-arg]\n",
+    ),
+  );
+
+  const config = loadConfig(workspace);
+
+  assert.deepEqual(config.profiles.backend.lint, [
+    { name: "ruff", args: ["--ignore", "BLE001"] },
+    { name: "mypy", args: [] },
+    { name: "mypy", args: ["--disable-error-code", "call-arg"] },
+  ]);
 });

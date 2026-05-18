@@ -72,6 +72,12 @@ test("lint adapters also cover ok and tool-error branches plus config resolution
   assert.equal(tsc.parseOutput("nonsense", "", 2).kind, "tool-error");
   assert.deepEqual(tsc.resolveConfigArgs?.(toolRoot), ["--project", join(toolRoot, "tsconfig.json")]);
   assert.deepEqual(tsc.checkArgs([], { configArgs: ["--project", "tsconfig.json"] }), ["--noEmit", "--project", "tsconfig.json"]);
+
+  const ruffWithArgs = resolveLintAdapter("ruff", ["--ignore", "BLE001"]);
+  assert.deepEqual(
+    ruffWithArgs.resolveConfigArgs?.(toolRoot),
+    ["--config", join(toolRoot, "ruff.toml"), "--ignore", "BLE001"],
+  );
 });
 
 test("test adapters classify results", () => {

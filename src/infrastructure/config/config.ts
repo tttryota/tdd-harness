@@ -38,6 +38,13 @@ export type UserDesignLayoutConfig = {
   testCaseDir?: string;
 };
 
+export type UserLintToolConfig =
+  | string
+  | {
+      name: string;
+      args?: string[];
+    };
+
 export type UserStorybookConfig = {
   renderCommand?: string[];
   smokeCommand?: string[];
@@ -69,6 +76,11 @@ export type DesignLayoutConfig = {
   testCaseDir: string;
 };
 
+export type ResolvedLintToolConfig = {
+  name: string;
+  args: string[];
+};
+
 export type StorybookConfig = {
   renderCommand: string[];
   smokeCommand: string[];
@@ -92,7 +104,7 @@ export type UserProfileConfig = {
   flow: FlowMode;
   steps: Record<FlowStep, string>;
   fallbackRunner: string;
-  lint?: string[];
+  lint?: UserLintToolConfig[];
   test?: string;
   sourceLayout?: UserSourceLayoutConfig;
   designLayout?: UserDesignLayoutConfig;
@@ -108,7 +120,7 @@ export type ResolvedProfileConfig = {
   flow: FlowMode;
   steps: Record<FlowStep, string>;
   fallbackRunner: string;
-  lint: string[];
+  lint: ResolvedLintToolConfig[];
   test: string;
   sourceLayout: SourceLayoutConfig;
   designLayout: DesignLayoutConfig;
@@ -203,8 +215,29 @@ function validateUserConfigShape(config: HarnessUserConfig): void {
       }
       if (profile.lint !== undefined) {
         for (const t of profile.lint) {
-          if (typeof t !== "string") {
-            throw new GuardError(`profile "${name}".lint の各要素は文字列である必要があります。`);
+          if (typeof t === "string") {
+            if (t.length === 0) {
+              throw new GuardError(`profile "${name}".lint の各要素は空でない文字列である必要があります。`);
+            }
+            continue;
+          }
+          if (!t || typeof t !== "object" || Array.isArray(t)) {
+            throw new GuardError(
+              `profile "${name}".lint の各要素は文字列または { name, args } 形式である必要があります。`,
+            );
+          }
+          if (typeof t.name !== "string" || t.name.length === 0) {
+            throw new GuardError(`profile "${name}".lint[].name は空でない文字列で指定してください。`);
+          }
+          if (t.args !== undefined) {
+            if (!Array.isArray(t.args)) {
+              throw new GuardError(`profile "${name}".lint[].args は文字列配列で指定してください。`);
+            }
+            for (const arg of t.args) {
+              if (typeof arg !== "string" || arg.length === 0) {
+                throw new GuardError(`profile "${name}".lint[].args の各要素は空でない文字列である必要があります。`);
+              }
+            }
           }
         }
       }
@@ -514,9 +547,10 @@ function resolveOneProfile(
 ): ResolvedProfileConfig {
   if (user.lint !== undefined) {
     for (const t of user.lint) {
-      if (!LINT_REGISTRY[t]) {
+      const toolName = typeof t === "string" ? t : t.name;
+      if (!LINT_REGISTRY[toolName]) {
         throw new GuardError(
-          `未知の lint ツール "${t}"。利用可能: ${Object.keys(LINT_REGISTRY).join(", ")}`,
+          `未知の lint ツール "${toolName}"。利用可能: ${Object.keys(LINT_REGISTRY).join(", ")}`,
         );
       }
     }
@@ -530,28 +564,28 @@ function resolveOneProfile(
   const hasExplicitLint = user.lint !== undefined;
   const hasExplicitTest = user.test !== undefined;
 
-  let lint: string[];
+  let lint: ResolvedLintToolConfig[];
   let test: string;
 
   if (hasExplicitLint && hasExplicitTest) {
-    lint = user.lint!;
+    lint = normalizeLintTools(user.lint!);
     test = user.test!;
   } else if (!hasExplicitLint && !hasExplicitTest) {
-    lint = ["ruff", "mypy"];
+    lint = normalizeLintTools(["ruff", "mypy"]);
     test = "pytest";
   } else if (hasExplicitTest && !hasExplicitLint) {
     test = user.test!;
     const testRuntime = TEST_REGISTRY[test]?.runtime;
     if (testRuntime === "python") {
-      lint = ["ruff", "mypy"];
+      lint = normalizeLintTools(["ruff", "mypy"]);
     } else {
       throw new GuardError(
         `lint が未指定ですが、test "${test}" (runtime: ${testRuntime}) に対するデフォルト lint は runtime が一致しません。lint を明示指定してください。`,
       );
     }
   } else {
-    lint = user.lint!;
-    const lintRuntime = LINT_REGISTRY[lint[0]]?.runtime;
+    lint = normalizeLintTools(user.lint!);
+    const lintRuntime = LINT_REGISTRY[lint[0]!.name]?.runtime;
     if (lintRuntime === "python") {
       test = "pytest";
     } else {
@@ -602,6 +636,14 @@ function resolveOneProfile(
     criteriaPreset: user.criteriaPreset,
     context: resolveProfileContextConfig(user.context),
   };
+}
+
+function normalizeLintTools(raw: UserLintToolConfig[]): ResolvedLintToolConfig[] {
+  return raw.map((tool) => (
+    typeof tool === "string"
+      ? { name: tool, args: [] }
+      : { name: tool.name, args: [...(tool.args ?? [])] }
+  ));
 }
 
 function cloneStepMap(steps: Record<FlowStep, string>): Record<FlowStep, string> {
@@ -674,14 +716,14 @@ function validateProfile(
   }
 
   for (const tool of profile.lint) {
-    if (!LINT_REGISTRY[tool]) {
+    if (!LINT_REGISTRY[tool.name]) {
       throw new GuardError(
-        `profile "${name}": 未知の lint ツール "${tool}"。利用可能: ${Object.keys(LINT_REGISTRY).join(", ")}`,
+        `profile "${name}": 未知の lint ツール "${tool.name}"。利用可能: ${Object.keys(LINT_REGISTRY).join(", ")}`,
       );
     }
   }
 
-  const runtimes = new Set(profile.lint.map((t) => LINT_REGISTRY[t].runtime));
+  const runtimes = new Set(profile.lint.map((t) => LINT_REGISTRY[t.name].runtime));
   if (runtimes.size > 1) {
     throw new GuardError(
       `profile "${name}": 異なる runtime の lint ツールを混在させることはできません（検出: ${[...runtimes].join(", ")}）。profile を分けてください。`,

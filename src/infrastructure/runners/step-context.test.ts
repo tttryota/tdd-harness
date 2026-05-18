@@ -14,7 +14,7 @@ function makeProfile(): ResolvedProfileConfig {
     steps: Object.fromEntries(
       Object.values(FLOW_STEP).map((step) => [step, "codex"]),
     ) as Record<(typeof FLOW_STEP)[keyof typeof FLOW_STEP], string>,
-    lint: ["ruff", "mypy"],
+    lint: [{ name: "ruff", args: [] }, { name: "mypy", args: [] }],
     test: "pytest",
     sourceLayout: {
       sourceDir: "backend/{{category}}",

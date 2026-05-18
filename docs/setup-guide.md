@@ -213,6 +213,16 @@ runners:
 
 `profile` は実行単位です。lint / test / sourceLayout / designLayout に加え、`flow` / `fallbackRunner` / `steps` / `context` も profile 内に置きます。`runners.<name>.model` は runner のデフォルト、`profile.context.stepOverrides.<step>.model` はその step 専用の上書きです。
 
+`lint` は文字列配列に加えて、追加引数付きオブジェクトも使えます。
+
+```yaml
+lint:
+  - name: ruff
+    args: ["--ignore", "BLE001"]
+  - name: mypy
+    args: ["--disable-error-code", "call-arg"]
+```
+
 ## 利用可能なツール
 
 ### lint adapter

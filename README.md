@@ -159,6 +159,16 @@ runners:
 
 `profile` は lint / test / sourceLayout / designLayout だけでなく `flow` / `fallbackRunner` / `steps` / `context` まで含む実行単位です。runner の切り替えは `profiles.<name>.steps` で行います。`runners.<name>.model` は runner のデフォルト、`profile.context.stepOverrides.<step>.model` はその step 専用の上書きです。
 
+`lint` は文字列配列に加えて、追加引数付きのオブジェクト形式も使えます。RED フェーズでのみ一時的に緩和したい lint がある場合に使います。
+
+```yaml
+lint:
+  - name: ruff
+    args: ["--ignore", "BLE001"]
+  - name: mypy
+    args: ["--disable-error-code", "call-arg"]
+```
+
 project-local skill は `.codex/skills/<name>/SKILL.md` を優先して読み込み、存在しない場合のみ `.claude/skills/<name>/SKILL.md` を後方互換で参照します。
 
 `.harness/config/harness.yml` に `profiles` が定義されていない場合はエラーになる。`./.harness/bin/harness init` でセットアップガイドを表示できる。
