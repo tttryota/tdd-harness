@@ -46,6 +46,7 @@ function baseYaml(): string {
       stepOverrides:
         impl_external_review:
           agent: harness-backend-reviewer
+          model: claude-opus-4-6
           skills: [backend-review-quality]
 runners:
   claude:
@@ -70,6 +71,14 @@ test("loadConfig resolves profile-centric runner mapping and context", () => {
   assert.equal(config.profiles.backend.flow, "full");
   assert.equal(config.profiles.backend.fallbackRunner, "codex");
   assert.equal(config.profiles.backend.steps.impl_external_review, "claude");
+  assert.deepEqual(config.profiles.backend.designLayout, {
+    specDir: "docs/spec/{{category}}",
+    testCaseDir: "tests/test-cases/{{category}}",
+  });
+  assert.equal(
+    config.profiles.backend.context?.stepOverrides.impl_external_review?.model,
+    "claude-opus-4-6",
+  );
   assert.deepEqual(config.profiles.backend.context?.defaultSkills, ["backend-review"]);
   assert.deepEqual(
     config.profiles.backend.context?.stepOverrides.impl_external_review?.skills,
@@ -208,6 +217,16 @@ test("loadConfig rejects invalid profile field shapes", () => {
       pattern: /\.sourceLayout はオブジェクト形式/,
     },
     {
+      name: "invalid designLayout shape",
+      body: baseYaml().replace("    toolRoot: backend\n", "    toolRoot: backend\n    designLayout: []\n"),
+      pattern: /\.designLayout はオブジェクト形式/,
+    },
+    {
+      name: "invalid designLayout specDir",
+      body: baseYaml().replace("    toolRoot: backend\n", "    toolRoot: backend\n    designLayout:\n      specDir: 1\n"),
+      pattern: /\.designLayout\.specDir は文字列/,
+    },
+    {
       name: "invalid storybook shape",
       body: baseYaml().replace("    toolRoot: backend\n", "    toolRoot: backend\n    storybook: []\n"),
       pattern: /\.storybook はオブジェクト形式/,
@@ -237,6 +256,11 @@ test("loadConfig rejects invalid context and runner definitions", () => {
       name: "unknown override step",
       body: baseYaml().replace("        impl_external_review:", "        unknown_step:"),
       pattern: /未知の step "unknown_step"/,
+    },
+    {
+      name: "invalid override model",
+      body: baseYaml().replace("          model: claude-opus-4-6\n", "          model: 1\n"),
+      pattern: /\.stepOverrides\.impl_external_review\.model は文字列/,
     },
     {
       name: "invalid generic command",
@@ -368,6 +392,12 @@ runners:
 `,
   );
   assert.throws(() => loadConfig(workspace), /scopePattern の末尾は "\/\*" または "\/\*\*"/);
+
+  writeConfig(
+    workspace,
+    `${baseYaml().replace("    toolRoot: backend\n", `    toolRoot: backend\n    designLayout:\n      specDir: \"../docs/spec\"\n`)}`
+  );
+  assert.throws(() => loadConfig(workspace), /"\.\." を含むパスは指定できません/);
 });
 
 test("loadConfig infers defaults, profile resolution, and missing profile guidance", () => {
@@ -408,6 +438,10 @@ runners:
   const config = loadConfig(workspace);
   assert.deepEqual(config.profiles.backend.lint, ["ruff", "mypy"]);
   assert.equal(config.profiles.backend.test, "pytest");
+  assert.deepEqual(config.profiles.backend.designLayout, {
+    specDir: "docs/spec/{{category}}",
+    testCaseDir: "tests/test-cases/{{category}}",
+  });
   assert.equal(inferProfile(config), "backend");
   assert.equal(resolveProfile(config, "backend").fallbackRunner, "claude");
 
@@ -498,4 +532,22 @@ runners:
 
   const config = loadConfig(workspace);
   assert.throws(() => inferProfile(config), /複数の profile があります/);
+});
+
+test("loadConfig preserves explicit designLayout overrides", () => {
+  const workspace = mkdtempSync(join(tmpdir(), "harness-config-design-layout-"));
+  writeConfig(
+    workspace,
+    baseYaml().replace(
+      "    criteriaPreset: backend\n",
+      "    criteriaPreset: backend\n    designLayout:\n      specDir: docs/spec/backend/{{category}}\n      testCaseDir: backend/{{category}}/docs/test-cases\n",
+    ),
+  );
+
+  const config = loadConfig(workspace);
+
+  assert.deepEqual(config.profiles.backend.designLayout, {
+    specDir: "docs/spec/backend/{{category}}",
+    testCaseDir: "backend/{{category}}/docs/test-cases",
+  });
 });

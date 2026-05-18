@@ -10,6 +10,8 @@ import { applyStepContext, joinPromptSections } from "../../infrastructure/runne
 import { isReadyLikeStatus } from "../policies/plan-readiness-policy.ts";
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_SPEC_DIR_TEMPLATE = "docs/spec/{{category}}";
+const DEFAULT_TEST_CASE_DIR_TEMPLATE = "tests/test-cases/{{category}}";
 
 export class DesignFlow {
   private boundary: ProjectBoundary;
@@ -26,21 +28,31 @@ export class DesignFlow {
     const root = this.boundary.getProjectRoot();
     const category = this.boundary.extractCategory(featureName);
     const name = this.boundary.extractName(featureName);
+    const specDir = this.resolveDesignDir(
+      this.profile?.designLayout.specDir ?? DEFAULT_SPEC_DIR_TEMPLATE,
+      category,
+      name,
+    );
+    const testCaseDir = this.resolveDesignDir(
+      this.profile?.designLayout.testCaseDir ?? DEFAULT_TEST_CASE_DIR_TEMPLATE,
+      category,
+      name,
+    );
 
     // design-flow の書き込み先を仕様書/テストケースディレクトリに限定
     const specAllowedTools = [
       "Read",
-      `Write(docs/spec/${category}/*)`,
-      `Edit(docs/spec/${category}/*)`,
+      `Write(${specDir}/*)`,
+      `Edit(${specDir}/*)`,
     ];
     const tcAllowedTools = [
       "Read",
-      `Write(tests/test-cases/${category}/*)`,
-      `Edit(tests/test-cases/${category}/*)`,
+      `Write(${testCaseDir}/*)`,
+      `Edit(${testCaseDir}/*)`,
     ];
 
     // 仕様書
-    const specPath = join(root, "docs/spec", category, `${name}.md`);
+    const specPath = join(root, specDir, `${name}.md`);
     if (existsSync(specPath)) {
       console.log(`仕様書は既に存在します: ${specPath}`);
     } else {
@@ -58,7 +70,7 @@ export class DesignFlow {
     }
 
     // テストケース
-    const tcPath = join(root, "tests/test-cases", category, `${name}.md`);
+    const tcPath = join(root, testCaseDir, `${name}.md`);
     if (existsSync(tcPath)) {
       console.log(`テストケースは既に存在します: ${tcPath}`);
     } else {
@@ -172,5 +184,9 @@ ${template}
   private readClaudeMd(): string {
     const claudeMdPath = join(this.boundary.getProjectRoot(), "CLAUDE.md");
     return existsSync(claudeMdPath) ? readFileSync(claudeMdPath, "utf-8") : "";
+  }
+
+  private resolveDesignDir(template: string, category: string, name: string): string {
+    return template.replaceAll("{{category}}", category).replaceAll("{{name}}", name);
   }
 }

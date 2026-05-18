@@ -33,6 +33,11 @@ export type UserSourceLayoutConfig = {
   additionalAllowedPrefixes?: string[];
 };
 
+export type UserDesignLayoutConfig = {
+  specDir?: string;
+  testCaseDir?: string;
+};
+
 export type UserStorybookConfig = {
   renderCommand?: string[];
   smokeCommand?: string[];
@@ -42,6 +47,7 @@ export type UserStepContextOverrideConfig = {
   agent?: string;
   skills?: string[];
   mcpConfigs?: string[];
+  model?: string;
 };
 
 export type UserProfileContextConfig = {
@@ -58,6 +64,11 @@ export type SourceLayoutConfig = {
   additionalAllowedPrefixes: string[];
 };
 
+export type DesignLayoutConfig = {
+  specDir: string;
+  testCaseDir: string;
+};
+
 export type StorybookConfig = {
   renderCommand: string[];
   smokeCommand: string[];
@@ -67,6 +78,7 @@ export type StepContextOverrideConfig = {
   agent?: string;
   skills: string[];
   mcpConfigs: string[];
+  model?: string;
 };
 
 export type ProfileContextConfig = {
@@ -83,6 +95,7 @@ export type UserProfileConfig = {
   lint?: string[];
   test?: string;
   sourceLayout?: UserSourceLayoutConfig;
+  designLayout?: UserDesignLayoutConfig;
   storybook?: UserStorybookConfig;
   exec?: string | string[];
   toolRoot?: string;
@@ -98,6 +111,7 @@ export type ResolvedProfileConfig = {
   lint: string[];
   test: string;
   sourceLayout: SourceLayoutConfig;
+  designLayout: DesignLayoutConfig;
   storybook?: StorybookConfig;
   exec: string[];
   toolRoot: string;
@@ -232,6 +246,18 @@ function validateUserConfigShape(config: HarnessUserConfig): void {
               throw new GuardError(`profile "${name}".sourceLayout.additionalAllowedPrefixes の各要素は文字列である必要があります。`);
             }
           }
+        }
+      }
+      if (profile.designLayout !== undefined) {
+        if (typeof profile.designLayout !== "object" || Array.isArray(profile.designLayout)) {
+          throw new GuardError(`profile "${name}".designLayout はオブジェクト形式で指定してください。`);
+        }
+        const dl = profile.designLayout;
+        if (dl.specDir !== undefined && typeof dl.specDir !== "string") {
+          throw new GuardError(`profile "${name}".designLayout.specDir は文字列である必要があります。`);
+        }
+        if (dl.testCaseDir !== undefined && typeof dl.testCaseDir !== "string") {
+          throw new GuardError(`profile "${name}".designLayout.testCaseDir は文字列である必要があります。`);
         }
       }
       if (profile.storybook !== undefined) {
@@ -450,6 +476,9 @@ function validateProfileContextConfig(
     if (override.agent !== undefined && typeof override.agent !== "string") {
       throw new GuardError(`${field}.stepOverrides.${step}.agent は文字列で指定してください。`);
     }
+    if (override.model !== undefined && typeof override.model !== "string") {
+      throw new GuardError(`${field}.stepOverrides.${step}.model は文字列で指定してください。`);
+    }
     if (override.skills !== undefined) {
       validateStringArrayField(override.skills, `${field}.stepOverrides.${step}.skills`);
     }
@@ -552,6 +581,11 @@ function resolveOneProfile(
     additionalAllowedPrefixes:
       userLayout?.additionalAllowedPrefixes ?? [".harness/reviews/"],
   };
+  const userDesignLayout = user.designLayout;
+  const designLayout: DesignLayoutConfig = {
+    specDir: userDesignLayout?.specDir ?? "docs/spec/{{category}}",
+    testCaseDir: userDesignLayout?.testCaseDir ?? "tests/test-cases/{{category}}",
+  };
 
   return {
     flow: user.flow,
@@ -560,6 +594,7 @@ function resolveOneProfile(
     lint,
     test,
     sourceLayout,
+    designLayout,
     storybook,
     exec,
     toolRoot,
@@ -675,6 +710,14 @@ function validateProfile(
     `profile "${name}".sourceLayout.testDir`,
     profile.sourceLayout.testDir,
   );
+  validatePathTemplate(
+    `profile "${name}".designLayout.specDir`,
+    profile.designLayout.specDir,
+  );
+  validatePathTemplate(
+    `profile "${name}".designLayout.testCaseDir`,
+    profile.designLayout.testCaseDir,
+  );
   validateScopePattern(
     `profile "${name}".sourceLayout.scopePattern`,
     profile.sourceLayout.scopePattern,
@@ -726,6 +769,7 @@ function resolveProfileContextConfig(
   for (const [step, override] of Object.entries(user.stepOverrides ?? {})) {
     stepOverrides[step as FlowStep] = {
       agent: override?.agent,
+      model: override?.model,
       skills: [...(override?.skills ?? [])],
       mcpConfigs: [...(override?.mcpConfigs ?? [])],
     };

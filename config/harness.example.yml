@@ -55,12 +55,16 @@ profiles:
           skills: [harness-backend-review-quality]
         impl_external_review:
           agent: harness-backend-reviewer
+          model: claude-opus-4-6
           skills: [harness-backend-review-quality]
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
       scopePattern: "backend/{{category}}/*"
       additionalAllowedPrefixes: [".harness/reviews/"]
+    designLayout:
+      specDir: "docs/spec/backend/{{category}}"
+      testCaseDir: "tests/test-cases/backend/{{category}}"
   frontend:
     flow: full
     fallbackRunner: codex
@@ -94,6 +98,9 @@ profiles:
       testDir: "frontend/src/{{category}}/{{name}}/__tests__"
       scopePattern: "frontend/src/{{category}}/{{name}}/*"
       additionalAllowedPrefixes: [".harness/reviews/", "frontend/src/mocks/handlers/"]
+    designLayout:
+      specDir: "docs/spec/frontend/{{category}}"
+      testCaseDir: "tests/test-cases/frontend/{{category}}"
 
 runners:
   claude:

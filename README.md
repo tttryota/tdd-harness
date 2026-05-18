@@ -86,10 +86,17 @@ profiles:
         impl_self_quality:
           agent: harness-backend-reviewer
           skills: [harness-backend-review-quality]
+        impl_external_review:
+          agent: harness-backend-reviewer
+          model: claude-opus-4-6
+          skills: [harness-backend-review-quality]
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
       scopePattern: "backend/{{category}}/*"
+    designLayout:
+      specDir: "docs/spec/backend/{{category}}"
+      testCaseDir: "tests/test-cases/backend/{{category}}"
   frontend:
     flow: full
     fallbackRunner: codex
@@ -123,6 +130,9 @@ profiles:
       testDir: "frontend/src/{{category}}/{{name}}/__tests__"
       scopePattern: "frontend/src/{{category}}/{{name}}/*"
       additionalAllowedPrefixes: [".harness/reviews/", "frontend/src/mocks/handlers/"]
+    designLayout:
+      specDir: "docs/spec/frontend/{{category}}"
+      testCaseDir: "tests/test-cases/frontend/{{category}}"
     storybook:
       renderCommand: ["pnpm", "storybook", "build", "--test", "--docs", "--output-dir", ".storybook-static-{{target}}"]
       smokeCommand: ["pnpm", "storybook", "test", "--stories-json", "{{storyFile}}"]
@@ -136,7 +146,7 @@ runners:
     type: claude
   claude-opus-review:
     type: claude
-    model: opus
+    model: claude-opus-4-6
   codex:
     type: codex
     sandbox: read-only
@@ -147,7 +157,7 @@ runners:
     promptFlag: "--prompt"
 ```
 
-`profile` は lint / test / sourceLayout だけでなく `flow` / `fallbackRunner` / `steps` / `context` まで含む実行単位です。runner の切り替えは `profiles.<name>.steps` で行います。
+`profile` は lint / test / sourceLayout / designLayout だけでなく `flow` / `fallbackRunner` / `steps` / `context` まで含む実行単位です。runner の切り替えは `profiles.<name>.steps` で行います。`runners.<name>.model` は runner のデフォルト、`profile.context.stepOverrides.<step>.model` はその step 専用の上書きです。
 
 project-local skill は `.codex/skills/<name>/SKILL.md` を優先して読み込み、存在しない場合のみ `.claude/skills/<name>/SKILL.md` を後方互換で参照します。
 
@@ -159,10 +169,10 @@ project-local skill は `.codex/skills/<name>/SKILL.md` を優先して読み込
 
 ```bash
 ./.harness/bin/harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能"
-./.harness/bin/harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能" --profile backend
+./.harness/bin/harness design --profile backend ingestion/chunk-splitter "Markdownをチャンク分割する機能"
 ```
 
-1. 仕様書を生成（`docs/spec/{category}/{name}.md`）
+1. 仕様書を生成（既定: `docs/spec/{category}/{name}.md`。`designLayout.specDir` 設定時はその配下）
 2. 人間が確認し、必要なら修正後に再実行して `status: ready` にする
 3. 再実行するとテストケースを生成
 4. 人間が確認し、必要なら修正後に再実行して `status: ready` にする
@@ -248,8 +258,8 @@ project-local skill は `.codex/skills/<name>/SKILL.md` を優先して読み込
 ---
 profile: backend
 scope: ingestion/chunk-splitter
-spec: docs/spec/ingestion/chunk-splitter.md
-test_cases: tests/test-cases/ingestion/chunk-splitter.md
+spec: docs/spec/backend/ingestion/chunk-splitter.md
+test_cases: tests/test-cases/backend/ingestion/chunk-splitter.md
 ---
 
 ## 今回やること

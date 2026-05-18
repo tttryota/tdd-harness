@@ -22,6 +22,10 @@ function makeProfile(): ResolvedProfileConfig {
       scopePattern: "backend/{{category}}/*",
       additionalAllowedPrefixes: [".harness/reviews/"],
     },
+    designLayout: {
+      specDir: "docs/spec/{{category}}",
+      testCaseDir: "tests/test-cases/{{category}}",
+    },
     exec: [],
     toolRoot: "/tmp/project",
     reviewCriteria: [],
@@ -33,6 +37,7 @@ function makeProfile(): ResolvedProfileConfig {
       stepOverrides: {
         [FLOW_STEP.IMPL_EXTERNAL_REVIEW]: {
           agent: "review-agent",
+          model: "claude-opus-4-6",
           skills: ["review-skill"],
           mcpConfigs: ["mcp/review.json"],
         },
@@ -45,6 +50,7 @@ test("resolveStepContext merges default and per-step context", () => {
   const context = resolveStepContext(makeProfile(), FLOW_STEP.IMPL_EXTERNAL_REVIEW);
 
   assert.equal(context.agent, "review-agent");
+  assert.equal(context.model, "claude-opus-4-6");
   assert.deepEqual(context.skillNames, ["core-skill", "review-skill"]);
   assert.deepEqual(context.mcpConfigs, ["mcp/default.json", "mcp/review.json"]);
 });
@@ -88,6 +94,7 @@ test("applyStepContext prefers .codex skills, then bundled skills, then .claude 
   );
 
   assert.equal(request.agent, "review-agent");
+  assert.equal(request.model, "claude-opus-4-6");
   assert.deepEqual(request.mcpConfigs, ["mcp/default.json", "mcp/review.json"]);
   assert.match(request.appendSystemPrompt ?? "", /core guidance/);
   assert.match(request.appendSystemPrompt ?? "", /bundled guidance/);
