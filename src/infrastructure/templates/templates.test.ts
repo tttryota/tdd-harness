@@ -34,6 +34,9 @@ test("loadTemplate falls back to bundled templates and throws for missing names"
   const testGenerateTemplate = loadTemplate("test-generate", root);
   assert.match(testGenerateTemplate, /except Exception/);
   assert.match(testGenerateTemplate, /broad exception 捕捉は使わない/);
+  assert.match(testGenerateTemplate, /静的 import/);
+  assert.match(testGenerateTemplate, /importlib/);
+  assert.match(testGenerateTemplate, /公開 API/);
   assert.throws(() => loadTemplate("missing-template", root), HarnessError);
 });
 
