@@ -101,6 +101,8 @@ test("DesignFlow falls back to bundled templates when project templates are abse
   await flow.run("quiz/result", "結果ページを作る", logger);
 
   assert.match(registry.requests[0]?.prompt ?? "", /ルール間の相互作用/);
+  assert.match(registry.requests[0]?.prompt ?? "", /# 具体例/);
+  assert.match(registry.requests[0]?.prompt ?? "", /# 受け入れ基準/);
   assert.match(registry.requests[1]?.prompt ?? "", /\[要仕様追記\]/);
 });
 

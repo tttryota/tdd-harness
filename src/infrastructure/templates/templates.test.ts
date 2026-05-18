@@ -19,6 +19,11 @@ test("loadTemplate prefers config overrides over project conventions", () => {
 test("loadTemplate falls back to bundled templates and throws for missing names", () => {
   const root = mkdtempSync(join(tmpdir(), "harness-template-builtin-"));
   assert.match(loadTemplate("review-response-format", root), /checklist/i);
+  const specTemplate = loadTemplate("spec-template", root);
+  assert.match(specTemplate, /# 具体例/);
+  assert.match(specTemplate, /# 技術判断/);
+  assert.match(specTemplate, /# スコープ外/);
+  assert.match(specTemplate, /# 受け入れ基準/);
   assert.throws(() => loadTemplate("missing-template", root), HarnessError);
 });
 
