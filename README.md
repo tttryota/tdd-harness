@@ -173,8 +173,10 @@ project-local skill は `.codex/skills/<name>/SKILL.md` を優先して読み込
 ```
 
 1. 仕様書を生成（既定: `docs/spec/{category}/{name}.md`。`designLayout.specDir` 設定時はその配下）
+   テンプレートは `spec-template` を使う。project override は `.harness/resources/templates/spec-template.md` または `templates.spec-template` で行う
 2. 人間が確認し、必要なら修正後に再実行して `status: ready` にする
 3. 再実行するとテストケースを生成
+   テンプレートは `test-case-template` を使う。project override は `.harness/resources/templates/test-case-template.md` または `templates.test-case-template` で行う
 4. 人間が確認し、必要なら修正後に再実行して `status: ready` にする
 
 ### Impl Flow（TDD 実装）

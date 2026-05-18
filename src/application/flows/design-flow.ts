@@ -7,6 +7,7 @@ import type { ResolvedProfileConfig } from "../../infrastructure/config/config.t
 import { FLOW_STEP } from "../../domain/model/steps.ts";
 import { GuardError } from "../../domain/model/types.ts";
 import { applyStepContext, joinPromptSections } from "../../infrastructure/runners/step-context.ts";
+import { loadTemplate } from "../../infrastructure/templates/templates.ts";
 import { isReadyLikeStatus } from "../policies/plan-readiness-policy.ts";
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
@@ -95,8 +96,7 @@ export class DesignFlow {
     allowedTools: string[], logger: Logger,
   ): Promise<void> {
     const root = this.boundary.getProjectRoot();
-    const templatePath = join(root, "docs/spec/TEMPLATE.md");
-    const template = existsSync(templatePath) ? readFileSync(templatePath, "utf-8") : "";
+    const template = this.loadDesignTemplate("spec-template");
     const claudeMd = this.readClaudeMd();
 
     const runner = this.registry.getRunner(FLOW_STEP.SPEC_GENERATE);
@@ -141,8 +141,7 @@ ${template}
   ): Promise<void> {
     const root = this.boundary.getProjectRoot();
     const spec = readFileSync(specPath, "utf-8");
-    const templatePath = join(root, "tests/test-cases/TEMPLATE.md");
-    const template = existsSync(templatePath) ? readFileSync(templatePath, "utf-8") : "";
+    const template = this.loadDesignTemplate("test-case-template");
 
     const runner = this.registry.getRunner(FLOW_STEP.TEST_CASE_GENERATE);
     await runner.run(
@@ -188,5 +187,13 @@ ${template}
 
   private resolveDesignDir(template: string, category: string, name: string): string {
     return template.replaceAll("{{category}}", category).replaceAll("{{name}}", name);
+  }
+
+  private loadDesignTemplate(templateName: string): string {
+    return loadTemplate(
+      templateName,
+      this.boundary.getProjectRoot(),
+      this.registry.getConfig().templates,
+    );
   }
 }
