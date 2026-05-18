@@ -24,6 +24,11 @@ test("loadTemplate falls back to bundled templates and throws for missing names"
   assert.match(specTemplate, /# 技術判断/);
   assert.match(specTemplate, /# スコープ外/);
   assert.match(specTemplate, /# 受け入れ基準/);
+  assert.match(specTemplate, /各主要ルールに対して最低1つ/);
+  const testCaseTemplate = loadTemplate("test-case-template", root);
+  assert.match(testCaseTemplate, /# 検証焦点/);
+  assert.match(testCaseTemplate, /# 網羅性チェック/);
+  assert.match(testCaseTemplate, /受け入れ基準の各項目に対応するテストケース/);
   assert.throws(() => loadTemplate("missing-template", root), HarnessError);
 });
 

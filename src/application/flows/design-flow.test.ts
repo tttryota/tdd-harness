@@ -103,7 +103,13 @@ test("DesignFlow falls back to bundled templates when project templates are abse
   assert.match(registry.requests[0]?.prompt ?? "", /ルール間の相互作用/);
   assert.match(registry.requests[0]?.prompt ?? "", /# 具体例/);
   assert.match(registry.requests[0]?.prompt ?? "", /# 受け入れ基準/);
+  assert.match(registry.requests[0]?.prompt ?? "", /各主要ルールに対して最低1つ/);
+  assert.match(registry.requests[1]?.prompt ?? "", /# 検証焦点/);
+  assert.match(registry.requests[1]?.prompt ?? "", /# 網羅性チェック/);
   assert.match(registry.requests[1]?.prompt ?? "", /\[要仕様追記\]/);
+  assert.match(registry.requests[1]?.prompt ?? "", /受け入れ基準の各項目に対応するテストケース/);
+  assert.match(registry.requests[1]?.prompt ?? "", /テストの種類ごとに検証焦点を明示/);
+  assert.match(registry.requests[1]?.prompt ?? "", /対応関係を網羅性チェックセクションに記載/);
 });
 
 test("DesignFlow loads project template overrides from .harness/resources/templates", async () => {
