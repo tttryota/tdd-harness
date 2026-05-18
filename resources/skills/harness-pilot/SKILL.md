@@ -29,7 +29,7 @@ description: TDD ハーネスの操作とワークフロー実行を支援する
 |---|---|
 | `./.harness/bin/harness init` | セットアップガイド表示 |
 | `./.harness/bin/harness sync-skills` | 配布用 skill を `.codex/skills/` と `.claude/skills/` に同期 |
-| `./.harness/bin/harness design <category/name> "<requirements>"` | 仕様書・テストケース生成 |
+| `./.harness/bin/harness design [--profile <name>] <category/name> "<requirements>"` | 仕様書・テストケース生成 |
 | `./.harness/bin/harness impl <plan-file> [--resume] [--flow full\|light] [--no-interactive]` | TDD 実装 |
 | `./.harness/bin/harness component <plan-file> [--flow full\|light] [--no-interactive]` | Component + Story 実装 |
 | `./.harness/bin/harness page <plan-file> [--flow full\|light] [--no-interactive]` | Page 実装 + レビュー + browser verify |
@@ -39,10 +39,12 @@ description: TDD ハーネスの操作とワークフロー実行を支援する
 ## 典型フロー
 
 ### バックエンド
-1. `design` で仕様書とテストケースを生成
-2. 人間が内容を確認し、ready にする
-3. plan を用意する
-4. `impl` を実行する
+1. `design` 初回実行で仕様書を生成する
+2. 人間が仕様書を確認し、frontmatter の `status` を `ready` にする
+3. 同じ `design` コマンドを再実行してテストケースを生成する
+4. 人間がテストケースを確認し、frontmatter の `status` を `ready` にする
+5. plan を用意する
+6. `impl` を実行する
 
 ### フロントエンド
 1. 仕様書・コンポーネント定義書・Figma キャッシュ・必要ならテストケースを ready にする
@@ -70,6 +72,7 @@ plan の詳細フォーマットは `/.harness/README.md` を正本とする。
   2. `.harness/resources/skills/<name>/SKILL.md`
   3. `.claude/skills/<name>/SKILL.md`
 - repo 固有 override が不要なら `.harness/resources/skills/` を正本として扱う
+- 配布元の更新後は `./.harness/bin/harness sync-skills` を実行し、展開先 `.codex/skills/` と `.claude/skills/` も同じ内容になっているか確認する
 
 ## よくある誤り
 

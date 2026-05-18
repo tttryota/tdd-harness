@@ -16,11 +16,13 @@ test("ReviewOrchestrator uses runner.run for external implementation review", as
 
   let reviewCalls = 0;
   let runCalls = 0;
+  let prompt = "";
   const runner: Runner = {
     name: "codex",
     capabilities: new Set(),
-    async run() {
+    async run(request) {
       runCalls += 1;
+      prompt = request.prompt;
       return { text: "{\"checklist\":[{\"item\":\"spec\",\"verdict\":\"pass\",\"evidence\":\"checked target.ts\"}],\"issues\":[]}" };
     },
     async review() {
@@ -42,11 +44,18 @@ test("ReviewOrchestrator uses runner.run for external implementation review", as
 
   const logger = new HarnessLogger("review-test", { baseDir: workspace });
   const orchestrator = new ReviewOrchestrator(logger, {} as never, workspace, registry);
-  const result = await (orchestrator as any).externalImplementationReview([targetFile], specFile);
+  const result = await (orchestrator as any).externalImplementationReview(
+    [targetFile],
+    specFile,
+    async () => "@@ -1 +1 @@\n-export const value = 0;\n+export const value = 1;\n",
+  );
 
   assert.equal(result.isLgtm, true);
   assert.equal(reviewCalls, 0);
   assert.equal(runCalls, 1);
+  assert.match(prompt, /## 変更 diff/);
+  assert.match(prompt, /export const value = 1/);
+  assert.match(prompt, /# spec/);
 });
 
 test("ReviewOrchestrator skips external test review when skipExternalReview is set", async () => {

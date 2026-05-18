@@ -333,7 +333,7 @@ export class ReviewOrchestrator {
     } else {
       try {
         const step3Result = await this.reviewStep(
-          () => this.externalImplementationReview(params.targetFiles, params.specPath),
+          () => this.externalImplementationReview(params.targetFiles, params.specPath, params.getFileDiff),
           params,
         );
         results.push(step3Result);
@@ -558,13 +558,21 @@ export class ReviewOrchestrator {
   private async externalImplementationReview(
     targetFiles: string[],
     specPath: string,
+    getFileDiff?: (files: string[]) => Promise<string>,
   ): Promise<ReviewResult> {
     const fileContents = this.readFiles(targetFiles);
     const spec = readFileSync(specPath, "utf-8");
     const config = this.registry.getConfig();
     const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
     const template = loadTemplate("review-external-impl", this.projectRoot, config.templates);
-    const prompt = renderTemplate(template, { fileContents, spec, responseFormat });
+    const changedHunks = getFileDiff ? await getFileDiff(targetFiles) : "";
+    const prompt = renderTemplate(template, {
+      targetFiles: targetFiles.join("\n"),
+      changedHunks: changedHunks || "(差分なし)",
+      fileContents,
+      spec,
+      responseFormat,
+    });
 
     return this.executeReview(FLOW_STEP.IMPL_EXTERNAL_REVIEW, prompt, "impl_external", {
       outputSchema: REVIEW_OUTPUT_SCHEMA,

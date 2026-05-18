@@ -10,10 +10,13 @@ import { FLOW_STEP } from "../../domain/model/steps.ts";
 import { isReadyLikeStatus } from "../policies/plan-readiness-policy.ts";
 
 function createRegistry(root: string) {
+  const requests: Array<{ step: string; allowedTools?: string[]; prompt: string }> = [];
   return {
+    requests,
     getRunner(step: string) {
       return {
-        async run(request: { prompt: string }) {
+        async run(request: { prompt: string; allowedTools?: string[] }) {
+          requests.push({ step, allowedTools: request.allowedTools, prompt: request.prompt });
           const match = /## 出力先\n(.+?)\n/.exec(request.prompt);
           if (match) {
             const outputPath = match[1]!;
@@ -45,6 +48,38 @@ test("DesignFlow generates spec and test cases when both are missing", async () 
 
   assert.match(readFileSync(join(root, "docs", "spec", "quiz", "result.md"), "utf-8"), /approved/);
   assert.match(readFileSync(join(root, "tests", "test-cases", "quiz", "result.md"), "utf-8"), /approved/);
+});
+
+test("DesignFlow respects profile designLayout for output paths and allowed tools", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-design-flow-layout-"));
+  mkdirSync(join(root, "docs", "spec"), { recursive: true });
+  mkdirSync(join(root, "tests", "test-cases"), { recursive: true });
+  writeFileSync(join(root, "docs", "spec", "TEMPLATE.md"), "# template\n", "utf-8");
+  writeFileSync(join(root, "tests", "test-cases", "TEMPLATE.md"), "# template\n", "utf-8");
+  const boundary = new Boundary(root);
+  const registry = createRegistry(root);
+  const flow = new DesignFlow(boundary, registry as any, {
+    designLayout: {
+      specDir: "docs/spec/backend/{{category}}",
+      testCaseDir: "backend/{{category}}/docs/test-cases",
+    },
+  } as any);
+  const logger = new HarnessLogger("design-test-layout", { baseDir: root });
+
+  await flow.run("quiz/result", "結果ページを作る", logger);
+
+  assert.match(readFileSync(join(root, "docs", "spec", "backend", "quiz", "result.md"), "utf-8"), /approved/);
+  assert.match(readFileSync(join(root, "backend", "quiz", "docs", "test-cases", "result.md"), "utf-8"), /approved/);
+  assert.deepEqual(registry.requests[0]?.allowedTools, [
+    "Read",
+    "Write(docs/spec/backend/quiz/*)",
+    "Edit(docs/spec/backend/quiz/*)",
+  ]);
+  assert.deepEqual(registry.requests[1]?.allowedTools, [
+    "Read",
+    "Write(backend/quiz/docs/test-cases/*)",
+    "Edit(backend/quiz/docs/test-cases/*)",
+  ]);
 });
 
 test("DesignFlow stops when existing spec is not ready", async () => {

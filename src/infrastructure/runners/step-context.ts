@@ -7,6 +7,7 @@ import { GuardError } from "../../domain/model/types.ts";
 
 export type StepContext = {
   agent?: string;
+  model?: string;
   skillNames: string[];
   mcpConfigs: string[];
 };
@@ -21,6 +22,7 @@ export function applyStepContext(
   return {
     ...request,
     agent: context.agent ?? request.agent,
+    model: context.model ?? request.model,
     mcpConfigs: uniqueStrings([...(request.mcpConfigs ?? []), ...context.mcpConfigs]),
     appendSystemPrompt: joinPromptSections([
       context.skillNames.length > 0 ? loadSkillPrompt(projectRoot, context.skillNames) : "",
@@ -37,6 +39,7 @@ export function resolveStepContext(
   const stepOverride = profileContext?.stepOverrides[step];
   return {
     agent: stepOverride?.agent ?? profileContext?.defaultAgent,
+    model: stepOverride?.model,
     skillNames: uniqueStrings([
       ...(profileContext?.defaultSkills ?? []),
       ...(stepOverride?.skills ?? []),

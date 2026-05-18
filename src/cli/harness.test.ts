@@ -23,7 +23,7 @@ function makeRuntime(overrides?: Partial<CliRuntime>) {
 function makeDeps(overrides?: Partial<CliDeps>): CliDeps {
   const runCalls: string[] = [];
   const base: CliDeps = {
-    loadConfig: () => ({ runners: { codex: { type: "codex" } } }) as any,
+    loadConfig: () => ({ profiles: { frontend: {} }, runners: { codex: { type: "codex" } } }) as any,
     inferProfile: () => "frontend",
     resolveProfile: () => ({
       flow: "full",
@@ -37,6 +37,10 @@ function makeDeps(overrides?: Partial<CliDeps>): CliDeps {
         testDir: "frontend/src/{{category}}/{{name}}/__tests__",
         scopePattern: "frontend/src/{{category}}/{{name}}/*",
         additionalAllowedPrefixes: [],
+      },
+      designLayout: {
+        specDir: "docs/spec/{{category}}",
+        testCaseDir: "tests/test-cases/{{category}}",
       },
       reviewCriteria: [],
       storybook: { renderCommand: ["node", "-e", ""], smokeCommand: ["node", "-e", ""] },
@@ -102,6 +106,31 @@ test("runCli dispatches commands and interactive assignment only when TTY is ena
   assert.deepEqual(calls, ["impl", "page", "component", "design"]);
 });
 
+test("runCli accepts design --profile before or after positional arguments", async () => {
+  const designRuns: Array<{ featureName: string; requirements: string }> = [];
+  const resolvedProfiles: string[] = [];
+  const deps = makeDeps({
+    resolveProfile: (_config, profileName) => {
+      resolvedProfiles.push(profileName);
+      return makeDeps().resolveProfile({} as any, profileName);
+    },
+    createDesignFlow: () => ({
+      run: async (featureName: string, requirements: string) => {
+        designRuns.push({ featureName, requirements });
+      },
+    }) as any,
+  });
+
+  await runCli(["design", "quiz/result", "requirements", "--profile", "backend"], makeRuntime().runtime, deps);
+  await runCli(["design", "--profile", "backend", "quiz/result", "requirements"], makeRuntime().runtime, deps);
+
+  assert.deepEqual(designRuns, [
+    { featureName: "quiz/result", requirements: "requirements" },
+    { featureName: "quiz/result", requirements: "requirements" },
+  ]);
+  assert.deepEqual(resolvedProfiles, ["backend", "backend"]);
+});
+
 test("runCli renders benchmark commands and init", async () => {
   const { runtime, stdout } = makeRuntime();
   const deps = makeDeps();
@@ -126,9 +155,29 @@ test("runCli rejects missing arguments and invalid benchmark arity", async () =>
   assert.equal(await main(["design", "quiz/result"], designRuntime, deps), 1);
   assert.match(designStderr[0] ?? "", /feature name and requirements required/);
 
+  const { runtime: designProfileRuntime, stderr: designProfileStderr } = makeRuntime();
+  assert.equal(await main(["design", "--profile", "quiz/result", "requirements"], designProfileRuntime, deps), 1);
+  assert.match(designProfileStderr[0] ?? "", /--profile requires a profile name/);
+
   const { runtime: benchRuntime, stderr: benchStderr } = makeRuntime();
   assert.equal(await main(["benchmark-summary"], benchRuntime, deps), 1);
   assert.match(benchStderr[0] ?? "", /one or two log directories/);
+});
+
+test("design command requests --profile when multiple profiles exist", async () => {
+  const { runtime, stderr } = makeRuntime();
+  const deps = makeDeps({
+    loadConfig: () => ({
+      profiles: {
+        backend: {},
+        frontend: {},
+      },
+      runners: { codex: { type: "codex" } },
+    }) as any,
+  });
+
+  assert.equal(await main(["design", "quiz/result", "requirements"], runtime, deps), 1);
+  assert.match(stderr[0] ?? "", /design コマンドでは --profile <name> を追加してください/);
 });
 
 test("runCli reports init guide read failures", async () => {

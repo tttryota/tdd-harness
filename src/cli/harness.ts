@@ -154,7 +154,7 @@ export function usageLines(cliName = LOCAL_CLI_NAME): string[] {
     `  ${cliName} impl <plan-file> [--resume] [--flow full|light] [--no-interactive]`,
     `  ${cliName} component <plan-file> [--flow full|light] [--no-interactive]`,
     `  ${cliName} page <plan-file> [--flow full|light] [--no-interactive]`,
-    `  ${cliName} design <feature-name> "<requirements>" [--profile <name>]`,
+    `  ${cliName} design [--profile <name>] <feature-name> "<requirements>"`,
     `  ${cliName} benchmark-summary <log-dir> [<log-dir>]`,
     `  ${cliName} benchmark-diagnose <log-dir> [<log-dir>]`,
     `  ${cliName} sync-skills`,
@@ -295,17 +295,69 @@ async function runDesignCommand(
   args: string[],
   deps: CliDeps,
 ): Promise<number> {
-  const featureName = requireValue(args[1], "Error: feature name and requirements required");
-  const requirements = requireValue(args[2], "Error: feature name and requirements required");
-  const profileFlagIndex = args.indexOf("--profile");
-  const profileName = profileFlagIndex !== -1 ? args[profileFlagIndex + 1] : undefined;
+  const { featureName, requirements, profileName } = parseDesignArgs(args.slice(1));
   const boundary = new FsProjectBoundary(projectRoot);
-  const profile = deps.resolveProfile(config, profileName ?? deps.inferProfile(config));
+  const profile = deps.resolveProfile(config, profileName ?? inferDesignProfile(config));
   const registry = deps.createRunnerRegistry(config, projectRoot, profile);
   const logger = deps.createLogger(featureName, projectRoot);
   const flow = deps.createDesignFlow(boundary, registry, profile);
   await flow.run(featureName, requirements, logger);
   return 0;
+}
+
+function parseDesignArgs(args: string[]): {
+  featureName: string;
+  requirements: string;
+  profileName?: string;
+} {
+  const positionals: string[] = [];
+  let profileName: string | undefined;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    if (arg === "--profile") {
+      const value = args[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new HarnessError("Error: --profile requires a profile name");
+      }
+      if (looksLikeFeatureName(value) && args[index + 2] !== undefined) {
+        throw new HarnessError("Error: --profile requires a profile name");
+      }
+      profileName = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--")) {
+      throw new HarnessError(`Error: unknown flag for design: ${arg}`);
+    }
+    positionals.push(arg);
+  }
+
+  if (positionals.length < 2) {
+    throw new HarnessError("Error: feature name and requirements required");
+  }
+  if (positionals.length > 2) {
+    throw new HarnessError("Error: design accepts exactly one feature name and one requirements string");
+  }
+
+  return {
+    featureName: positionals[0]!,
+    requirements: positionals[1]!,
+    profileName,
+  };
+}
+
+function looksLikeFeatureName(value: string): boolean {
+  const parts = value.split("/");
+  return parts.length === 2 && parts.every((part) => part.length > 0);
+}
+
+function inferDesignProfile(config: HarnessConfig): string {
+  const names = Object.keys(config.profiles);
+  if (names.length === 1) return names[0]!;
+  throw new HarnessError(
+    `複数の profile があります（${names.join(", ")}）。design コマンドでは --profile <name> を追加してください。`,
+  );
 }
 
 function runBenchmarkSummaryCommand(args: string[], runtime: CliRuntime, deps: CliDeps): number {
