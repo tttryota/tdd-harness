@@ -31,6 +31,15 @@ test("loadTemplate falls back to bundled templates and throws for missing names"
   assert.match(testCaseTemplate, /# 検証焦点/);
   assert.match(testCaseTemplate, /# 網羅性チェック/);
   assert.match(testCaseTemplate, /受け入れ基準の各項目に対応するテストケース/);
+  assert.match(testCaseTemplate, /検証粒度を明示/);
+  assert.match(testCaseTemplate, /ログ検証を含む場合/);
+  assert.match(testCaseTemplate, /件数制約/);
+  assert.match(testCaseTemplate, /例外検証を含む場合/);
+  const reviewTestQualityTemplate = loadTemplate("review-test-quality", root);
+  assert.match(reviewTestQualityTemplate, /検証強度がテストケース文書の期待結果の粒度と一致/);
+  assert.match(reviewTestQualityTemplate, /件数の exact match を要求しない/);
+  assert.match(reviewTestQualityTemplate, /完全一致を要求しない/);
+  assert.match(reviewTestQualityTemplate, /書かれていない検証を追加要求しない/);
   const testGenerateTemplate = loadTemplate("test-generate", root);
   assert.match(testGenerateTemplate, /except Exception/);
   assert.match(testGenerateTemplate, /broad exception 捕捉は使わない/);
