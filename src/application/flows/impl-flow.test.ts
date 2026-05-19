@@ -194,3 +194,118 @@ test("ImplFlow reviews only changed test and implementation files", async () => 
   assert.deepEqual(calls[1].targetFiles, [changedImplFile]);
   assert.deepEqual(await calls[1].rescanFiles(), [changedImplFile]);
 });
+
+test("ImplFlow resume skips completed implementation review phases", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-impl-resume-"));
+  mkdirSync(join(root, ".harness", "resources", "criteria"), { recursive: true });
+  writeFileSync(join(root, ".harness", "resources", "criteria", "review-criteria-common.md"), "# common\n", "utf-8");
+  writeFileSync(join(root, ".harness", "resources", "criteria", "review-criteria-backend.md"), "# backend\n", "utf-8");
+  writeFileSync(join(root, "spec.md"), "---\nstatus: approved\n---\n# spec\n", "utf-8");
+  writeFileSync(join(root, "cases.md"), "---\nstatus: approved\n---\n# cases\n", "utf-8");
+  const reviewCalls: string[] = [];
+  const savedSteps: string[] = [];
+  const logger = {
+    log() {},
+    logCommand() {},
+    logTranscript() {},
+    saveReviewData() {},
+    saveCheckpoint(data: { completedStep: string }) {
+      savedSteps.push(data.completedStep);
+    },
+    loadCheckpoint() {
+      return {
+        planPath: "plan.md",
+        completedStep: "impl_review_criteria_passed",
+        sessionId: "sess-1",
+        testGenerationDecision: "updated",
+        records: [],
+        greenAttempt: 2,
+        timestamp: "now",
+      };
+    },
+    clearCheckpoint() {},
+    summarizeRunnerUsage() {
+      return { total: { runs: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }, byStep: {} };
+    },
+  };
+  const reviewOrchestrator = {
+    restoreRecords() {},
+    getRecords() { return []; },
+    runImplementationCriteriaReview: async () => { reviewCalls.push("criteria"); return {}; },
+    runImplementationQualityReview: async () => { reviewCalls.push("quality"); return {}; },
+    runImplementationExternalReview: async () => { reviewCalls.push("external"); return {}; },
+    appendDesignDecisionRecords: () => { reviewCalls.push("design"); },
+  };
+  const runtimeFactory = {
+    createImplRuntime() {
+      return {
+        logger,
+        lintGuard: {} as any,
+        reviewOrchestrator,
+        driftGuard: { startTask() {}, checkTimeout() {}, checkDiffScope() {}, recordTestAttempt() { return null; } },
+      };
+    },
+  } as any;
+  const boundary = {
+    getProjectRoot: () => root,
+    implementationGuard() {},
+    validateScope() {},
+    extractCategory() { return "ingestion"; },
+    extractName() { return "chunk"; },
+    assertWithinProject() {},
+    readFrontmatter() { return {}; },
+    testPathForScope: () => "backend/ingestion/tests",
+    scopeAllowedTools: () => ["Read"],
+    testAllowedTools: () => ["Read"],
+    implAllowedTools: () => ["Read"],
+    findChangedImplementationFiles: async () => [join(root, "chunk.ts")],
+    findChangedTestFiles: async () => [],
+    findSourceFiles: async () => [],
+    findImplementationFiles: async () => [join(root, "chunk.ts")],
+    findTestFiles: async () => [],
+    findMisplacedTestFiles: async () => [],
+    stageFiles: async () => {},
+    verifyChangedFilesWithinScope: async () => {},
+    getCurrentCommitHash: async () => "",
+    countDiffLines: async () => 0,
+    countDiffLinesForFiles: async () => 0,
+    getFileDiff: async () => "",
+  } as any;
+  const flow = new ImplFlow(boundary, {
+    getConfig() { return { runners: {}, templates: {} }; },
+    getStepMapping() { return {}; },
+    isStepSkipped() { return false; },
+    getRunner() { throw new Error("should not run generation on resume"); },
+  } as any, {
+    toolRoot: root,
+    exec: [],
+    reviewCriteria: [],
+    criteriaPreset: "backend",
+  } as any, {
+    frameworkName: "fake",
+    buildArgs() { return []; },
+    parseResult() { return { kind: "passed", output: "" }; },
+  } as any, [], runtimeFactory, new LauncherToolExecutor());
+
+  await (flow as any).run("plan.md", {
+    resume: true,
+    plan: {
+      type: "impl",
+      profile: "backend",
+      scope: "ingestion/chunk",
+      specPath: join(root, "spec.md"),
+      testCasesPath: join(root, "cases.md"),
+      description: "impl",
+      targets: [],
+      dependencies: [],
+      browserScenarios: [],
+      targetTestCases: ["case"],
+      exclusions: [],
+      completionCriteria: [],
+      designDecisions: ["decision"],
+    },
+  });
+
+  assert.deepEqual(reviewCalls, ["quality", "external", "design"]);
+  assert.deepEqual(savedSteps, ["impl_review_quality_passed", "impl_reviewed"]);
+});

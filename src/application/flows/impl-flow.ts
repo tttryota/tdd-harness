@@ -217,6 +217,7 @@ export class ImplFlow {
     const resumeFrom = checkpoint?.completedStep ?? null;
     let sessionId = checkpoint?.sessionId ?? "";
     let testGenerationDecision = checkpoint?.testGenerationDecision ?? "updated";
+    let greenAttempt = checkpoint?.greenAttempt ?? 0;
 
     if (resumeFrom) {
       console.log(`チェックポイントから再開: ${resumeFrom} 以降を実行`);
@@ -439,11 +440,20 @@ export class ImplFlow {
           timestamp: new Date().toISOString(),
         });
 
-        // 実装レビュー（3ステップ: self_criteria + self_quality + codex）
-        await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
-        this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: attempt, alreadyGreen: false });
-        logger.clearCheckpoint();
-        console.log("完了しました。");
+        greenAttempt = attempt;
+        await this.resumeImplReviewFromCheckpoint({
+          reviewOrchestrator,
+          plan,
+          criteriaPaths,
+          testPath,
+          logger,
+          planPath,
+          sessionId,
+          testGenerationDecision,
+          greenAttempt,
+          resumeFrom: "green_confirmed",
+          alreadyGreen: false,
+        });
         return;
       }
 
@@ -467,10 +477,19 @@ export class ImplFlow {
 
     // GREEN確認済みからの再開: 実装レビューのみ実行
     if (this.shouldSkip(resumeFrom, "green_confirmed") && !this.shouldSkip(resumeFrom, "impl_reviewed")) {
-      await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
-      const greenAttempt = checkpoint?.greenAttempt ?? 1;
-      this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: greenAttempt, alreadyGreen: false });
-      console.log("完了しました。");
+      await this.resumeImplReviewFromCheckpoint({
+        reviewOrchestrator,
+        plan,
+        criteriaPaths,
+        testPath,
+        logger,
+        planPath,
+        sessionId,
+        testGenerationDecision,
+        greenAttempt: checkpoint?.greenAttempt ?? 1,
+        resumeFrom,
+        alreadyGreen: false,
+      });
     }
   }
 
@@ -607,6 +626,118 @@ ${issueList}
       getFileDiff: (files: string[]) => this.boundary.getFileDiff(files),
       designDecisions: plan.designDecisions,
       reviewMode: "implementation",
+    });
+  }
+
+  private async resumeImplReviewFromCheckpoint(options: {
+    reviewOrchestrator: ReviewOrchestrator;
+    plan: ValidatedImplPlan;
+    criteriaPaths: string[];
+    testPath: string;
+    logger: Logger;
+    planPath: string;
+    sessionId: string;
+    testGenerationDecision: "noop" | "updated";
+    greenAttempt: number;
+    resumeFrom: CompletedStep | null;
+    alreadyGreen: boolean;
+  }): Promise<void> {
+    const { reviewOrchestrator, plan, criteriaPaths, testPath, logger } = options;
+    const implFiles = await this.boundary.findChangedImplementationFiles(plan.scope);
+    if (implFiles.length === 0) {
+      this.generateReport(plan, logger, reviewOrchestrator.getRecords(), {
+        greenAttempts: options.greenAttempt,
+        alreadyGreen: options.alreadyGreen,
+      });
+      logger.clearCheckpoint();
+      console.log("完了しました。");
+      return;
+    }
+
+    const reviewParams = {
+      targetFiles: implFiles,
+      specPath: plan.resolvedPaths.specPath,
+      criteriaPaths,
+      runTests: async () => {
+        const result = await this.runTests(testPath);
+        if (!result.passed) {
+          throw new HarnessError(`テスト失敗: ${result.output}`);
+        }
+      },
+      rescanFiles: () => this.boundary.findChangedImplementationFiles(plan.scope),
+      scopeAllowedTools: this.boundary.implAllowedTools(plan.scope),
+      getFileDiff: (files: string[]) => this.boundary.getFileDiff(files),
+      designDecisions: plan.designDecisions,
+      reviewMode: "implementation" as const,
+    };
+
+    if (!this.shouldSkip(options.resumeFrom, "impl_review_criteria_passed")) {
+      console.log("実装レビュー実行中... (criteria)");
+      await reviewOrchestrator.runImplementationCriteriaReview(reviewParams);
+      this.saveImplCheckpoint(logger, {
+        planPath: options.planPath,
+        completedStep: "impl_review_criteria_passed",
+        sessionId: options.sessionId,
+        testGenerationDecision: options.testGenerationDecision,
+        greenAttempt: options.greenAttempt,
+        records: reviewOrchestrator.getRecords(),
+      });
+    }
+
+    if (!this.shouldSkip(options.resumeFrom, "impl_review_quality_passed")) {
+      console.log("実装レビュー実行中... (quality)");
+      await reviewOrchestrator.runImplementationQualityReview(reviewParams);
+      this.saveImplCheckpoint(logger, {
+        planPath: options.planPath,
+        completedStep: "impl_review_quality_passed",
+        sessionId: options.sessionId,
+        testGenerationDecision: options.testGenerationDecision,
+        greenAttempt: options.greenAttempt,
+        records: reviewOrchestrator.getRecords(),
+      });
+    }
+
+    if (!this.shouldSkip(options.resumeFrom, "impl_reviewed")) {
+      console.log("実装レビュー実行中... (external)");
+      await reviewOrchestrator.runImplementationExternalReview(reviewParams);
+      reviewOrchestrator.appendDesignDecisionRecords(plan.designDecisions);
+      this.saveImplCheckpoint(logger, {
+        planPath: options.planPath,
+        completedStep: "impl_reviewed",
+        sessionId: options.sessionId,
+        testGenerationDecision: options.testGenerationDecision,
+        greenAttempt: options.greenAttempt,
+        records: reviewOrchestrator.getRecords(),
+      });
+    }
+
+    this.generateReport(plan, logger, reviewOrchestrator.getRecords(), {
+      greenAttempts: options.greenAttempt,
+      alreadyGreen: options.alreadyGreen,
+    });
+    logger.clearCheckpoint();
+    console.log("完了しました。");
+  }
+
+  private saveImplCheckpoint(
+    logger: Logger,
+    options: {
+      planPath: string;
+      completedStep: CompletedStep;
+      sessionId: string;
+      testGenerationDecision: "noop" | "updated";
+      greenAttempt: number;
+      records: ReviewRecord[];
+    },
+  ): void {
+    logger.saveCheckpoint({
+      planPath: options.planPath,
+      completedStep: options.completedStep,
+      sessionId: options.sessionId,
+      testGenerationDecision: options.testGenerationDecision,
+      records: options.records,
+      greenAttempt: options.greenAttempt,
+      timestamp: new Date().toISOString(),
     });
   }
 

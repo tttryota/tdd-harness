@@ -127,6 +127,55 @@ export class ReviewOrchestrator {
     return this.runImplementationReview(params, results);
   }
 
+  async runImplementationCriteriaReview(params: ReviewParams): Promise<ReviewResult> {
+    return this.reviewStep(
+      () => this.selfReviewCriteria(params.targetFiles, params.criteriaPaths),
+      params,
+    );
+  }
+
+  async runImplementationQualityReview(params: ReviewParams): Promise<ReviewResult> {
+    return this.reviewStep(
+      () => this.selfReviewQuality(params.targetFiles, params.specPath),
+      params,
+    );
+  }
+
+  async runImplementationExternalReview(params: ReviewParams): Promise<ReviewResult | null> {
+    if (this.registry.isStepSkipped(FLOW_STEP.IMPL_EXTERNAL_REVIEW)) {
+      return null;
+    }
+    try {
+      return await this.reviewStep(
+        () => this.externalImplementationReview(params.targetFiles, params.specPath, params.getFileDiff),
+        params,
+      );
+    } catch (error: unknown) {
+      if (error instanceof RunnerRateLimitError) {
+        this.logger.log(EVENT.RUNNER_RATE_LIMITED, { fallback: "dual_fallback", runner: error.runnerName });
+        const dualResult = await this.runDualStep(params);
+        return dualResult.at(-1) ?? null;
+      }
+      throw error;
+    }
+  }
+
+  appendDesignDecisionRecords(designDecisions?: string[]): void {
+    if (!designDecisions) return;
+    for (const decision of designDecisions) {
+      this.records.push({
+        step: "design_decision",
+        cycle: 0,
+        reviewer: "plan",
+        findings: [],
+        decision: "accepted",
+        diffBefore: "",
+        diffAfter: "",
+        judgmentSummary: decision,
+      });
+    }
+  }
+
   async runPageReview(params: PageReviewParams): Promise<ReviewResult[]> {
     const results: ReviewResult[] = [];
     let minorOnlyCycles = 0;
@@ -314,56 +363,18 @@ export class ReviewOrchestrator {
       mode: this.registry.isStepSkipped(FLOW_STEP.IMPL_EXTERNAL_REVIEW) ? "impl-2-step" : "impl-3-step",
     });
 
-    // Step 1: セルフレビュー（レビュー観点チェック）
-    const step1Result = await this.reviewStep(
-      () => this.selfReviewCriteria(params.targetFiles, params.criteriaPaths),
-      params,
-    );
+    const step1Result = await this.runImplementationCriteriaReview(params);
     results.push(step1Result);
 
-    // Step 2: セルフレビュー（品質チェック）
-    const step2Result = await this.reviewStep(
-      () => this.selfReviewQuality(params.targetFiles, params.specPath),
-      params,
-    );
+    const step2Result = await this.runImplementationQualityReview(params);
     results.push(step2Result);
 
-    // Step 3: 外部レビュー
-    if (this.registry.isStepSkipped(FLOW_STEP.IMPL_EXTERNAL_REVIEW)) {
-      // light フロー: 外部レビューをスキップ
-    } else {
-      try {
-        const step3Result = await this.reviewStep(
-          () => this.externalImplementationReview(params.targetFiles, params.specPath, params.getFileDiff),
-          params,
-        );
-        results.push(step3Result);
-      } catch (error: unknown) {
-        if (error instanceof RunnerRateLimitError) {
-          this.logger.log(EVENT.RUNNER_RATE_LIMITED, { fallback: "dual_fallback", runner: error.runnerName });
-          const dualResult = await this.runDualStep(params);
-          results.push(...dualResult);
-        } else {
-          throw error;
-        }
-      }
+    const step3Result = await this.runImplementationExternalReview(params);
+    if (step3Result) {
+      results.push(step3Result);
     }
 
-    // 設計判断を accepted として記録
-    if (params.designDecisions) {
-      for (const decision of params.designDecisions) {
-        this.records.push({
-          step: "design_decision",
-          cycle: 0,
-          reviewer: "plan",
-          findings: [],
-          decision: "accepted",
-          diffBefore: "",
-          diffAfter: "",
-          judgmentSummary: decision,
-        });
-      }
-    }
+    this.appendDesignDecisionRecords(params.designDecisions);
 
     return results;
   }

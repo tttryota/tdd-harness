@@ -174,6 +174,8 @@ export const STEP_ORDER = [
   "test_reviewed",
   "red_confirmed",
   "green_confirmed",
+  "impl_review_criteria_passed",
+  "impl_review_quality_passed",
   "impl_reviewed",
 ] as const;
 
