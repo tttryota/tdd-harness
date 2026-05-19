@@ -24,6 +24,9 @@ test("loadTemplate falls back to bundled templates and throws for missing names"
   assert.match(specTemplate, /# 技術判断/);
   assert.match(specTemplate, /# スコープ外/);
   assert.match(specTemplate, /# 受け入れ基準/);
+  assert.match(specTemplate, /# モジュール構成/);
+  assert.match(specTemplate, /概ね 200-300 行に収まる/);
+  assert.match(specTemplate, /単一ファイルで実装する/);
   assert.match(specTemplate, /各主要ルールに対して最低1つ/);
   assert.match(specTemplate, /送出する例外の型名と発生条件/);
   assert.match(specTemplate, /呼び出し元との契約/);
@@ -49,10 +52,18 @@ test("loadTemplate falls back to bundled templates and throws for missing names"
   const implGenerateTemplate = loadTemplate("impl-generate", root);
   assert.match(implGenerateTemplate, /スコープ外ファイルは読み取り専用/);
   assert.match(implGenerateTemplate, /実装コードと、それに対応するテストコードだけ/);
+  assert.match(implGenerateTemplate, /モジュール構成/);
+  assert.match(implGenerateTemplate, /新しいファイル構成やモジュール分割を、その場の判断で発明しない/);
   assert.match(implGenerateTemplate, /notes/);
   const implRetryTemplate = loadTemplate("impl-retry", root);
   assert.match(implRetryTemplate, /スコープ外ファイルは読み取り専用/);
   assert.match(implRetryTemplate, /実装コードと、それに対応するテストコードだけ/);
+  assert.match(implRetryTemplate, /モジュール構成/);
+  assert.match(implRetryTemplate, /新しいファイル構成やモジュール分割を、その場の判断で発明しない/);
+  const reviewImplCriteriaTemplate = loadTemplate("review-impl-criteria", root);
+  assert.match(reviewImplCriteriaTemplate, /モジュール構成/);
+  assert.match(reviewImplCriteriaTemplate, /新規ファイル作成やファイル分割を伴う構造再設計は要求しない/);
+  assert.match(reviewImplCriteriaTemplate, /行数だけを根拠にした分割要求はしない/);
   assert.throws(() => loadTemplate("missing-template", root), HarnessError);
 });
 
