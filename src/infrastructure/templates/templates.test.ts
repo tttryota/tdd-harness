@@ -37,6 +37,13 @@ test("loadTemplate falls back to bundled templates and throws for missing names"
   assert.match(testGenerateTemplate, /静的 import/);
   assert.match(testGenerateTemplate, /importlib/);
   assert.match(testGenerateTemplate, /公開 API/);
+  const implGenerateTemplate = loadTemplate("impl-generate", root);
+  assert.match(implGenerateTemplate, /スコープ外ファイルは読み取り専用/);
+  assert.match(implGenerateTemplate, /実装コードと、それに対応するテストコードだけ/);
+  assert.match(implGenerateTemplate, /notes/);
+  const implRetryTemplate = loadTemplate("impl-retry", root);
+  assert.match(implRetryTemplate, /スコープ外ファイルは読み取り専用/);
+  assert.match(implRetryTemplate, /実装コードと、それに対応するテストコードだけ/);
   assert.throws(() => loadTemplate("missing-template", root), HarnessError);
 });
 

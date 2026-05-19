@@ -22,6 +22,9 @@ test("prepareRequest inlines unsupported system prompts and strips unsupported c
 
   assert.match(prepared.prompt, /Additional Context/);
   assert.match(prepared.prompt, /Only modify files matching: Write\(src\/\*\*\)/);
+  assert.match(prepared.prompt, /Treat every other file as read-only/);
+  assert.match(prepared.prompt, /specs, docs, plans, configs/);
+  assert.match(prepared.prompt, /mention it in your response instead of editing/);
   assert.equal(prepared.appendSystemPrompt, undefined);
   assert.equal(prepared.sessionId, undefined);
   assert.equal(prepared.agent, undefined);

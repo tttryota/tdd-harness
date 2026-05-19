@@ -79,7 +79,11 @@ export function prepareRequest(runner: Runner, request: RunnerRequest): RunnerRe
   if (prepared.allowedTools && !runner.capabilities.has(RUNNER_CAPABILITY.ALLOWED_TOOLS)) {
     const writePatterns = prepared.allowedTools.filter(t => t.startsWith("Write(") || t.startsWith("Edit("));
     if (writePatterns.length > 0) {
-      prepared.prompt += `\n\n## File Scope Constraint\nOnly modify files matching: ${writePatterns.join(", ")}`;
+      prepared.prompt += `\n\n## File Scope Constraint
+- Only modify files matching: ${writePatterns.join(", ")}
+- Treat every other file as read-only, including specs, docs, plans, configs, and review artifacts unless explicitly listed above
+- Do not create, edit, move, or delete out-of-scope files
+- If you find an out-of-scope issue, mention it in your response instead of editing the file`;
     }
     prepared.allowedTools = undefined;
   }
