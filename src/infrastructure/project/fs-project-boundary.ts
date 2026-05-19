@@ -1,5 +1,5 @@
 import { existsSync, realpathSync, lstatSync, readFileSync } from "node:fs";
-import { resolve, join, dirname } from "node:path";
+import { resolve, join, dirname, basename } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { ProjectBoundary, ProjectBoundaryLayout } from "../../application/ports/project-boundary.ts";
@@ -159,6 +159,9 @@ export class FsProjectBoundary implements ProjectBoundary {
     const sourceDir = this.resolvePattern(this.sourceLayout.sourceDir, scope);
     const testDir = this.resolvePattern(this.sourceLayout.testDir, scope);
     const allFiles = await this.findFilesInDirs([join(this.projectRoot, sourceDir)]);
+    if (this.isColocatedScope(scope)) {
+      return allFiles.filter((file) => !this.isTestLikeFile(file));
+    }
     const resolvedTestDir = join(this.projectRoot, testDir);
     const testDirPrefix = resolvedTestDir.endsWith("/") ? resolvedTestDir : resolvedTestDir + "/";
     return allFiles.filter((f) => f !== resolvedTestDir && !f.startsWith(testDirPrefix));
@@ -166,7 +169,17 @@ export class FsProjectBoundary implements ProjectBoundary {
 
   async findTestFiles(scope: string): Promise<string[]> {
     const testDir = this.resolvePattern(this.sourceLayout.testDir, scope);
-    return this.findFilesInDirs([join(this.projectRoot, testDir)]);
+    const files = await this.findFilesInDirs([join(this.projectRoot, testDir)]);
+    if (!this.isColocatedScope(scope)) return files;
+    return files.filter((file) => this.isTestLikeFile(file));
+  }
+
+  async findChangedImplementationFiles(scope: string): Promise<string[]> {
+    return this.filterChangedFiles(await this.findImplementationFiles(scope), await this.changedScopeFiles(scope));
+  }
+
+  async findChangedTestFiles(scope: string): Promise<string[]> {
+    return this.filterChangedFiles(await this.findTestFiles(scope), await this.changedScopeFiles(scope));
   }
 
   async findMisplacedTestFiles(scope: string): Promise<string[]> {
@@ -257,6 +270,24 @@ export class FsProjectBoundary implements ProjectBoundary {
     return [...patterns];
   }
 
+  private isColocatedScope(scope: string): boolean {
+    const sourceDir = this.resolvePattern(this.sourceLayout.sourceDir, scope);
+    const testDir = this.resolvePattern(this.sourceLayout.testDir, scope);
+    return join(this.projectRoot, sourceDir) === join(this.projectRoot, testDir);
+  }
+
+  private isTestLikeFile(filePath: string): boolean {
+    const name = basename(filePath);
+    return this.testLikeNamePatterns().some((pattern) => this.matchesGlobPattern(name, pattern));
+  }
+
+  private matchesGlobPattern(value: string, pattern: string): boolean {
+    const escaped = pattern
+      .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+      .replaceAll("*", ".*");
+    return new RegExp(`^${escaped}$`).test(value);
+  }
+
   testPathForScope(scope: string): string {
     return this.resolvePattern(this.sourceLayout.testDir, scope);
   }
@@ -296,10 +327,12 @@ export class FsProjectBoundary implements ProjectBoundary {
 
   testAllowedTools(scope: string): string[] {
     const testDir = this.resolvePattern(this.sourceLayout.testDir, scope);
+    const writePatterns = this.isColocatedScope(scope)
+      ? this.testLikeNamePatterns().flatMap((pattern) => [`${testDir}/${pattern}`, `${testDir}/**/${pattern}`])
+      : [`${testDir}/**`];
     return [
       "Read",
-      `Write(${testDir}/**)`,
-      `Edit(${testDir}/**)`,
+      ...writePatterns.flatMap((pattern) => [`Write(${pattern})`, `Edit(${pattern})`]),
       ...this.resolvedAdditionalAllowedPrefixes().flatMap((prefix) => [
         `Write(${prefix}**)`,
         `Edit(${prefix}**)`,
@@ -322,6 +355,16 @@ export class FsProjectBoundary implements ProjectBoundary {
     const untracked = await this.gitListChangedFiles("git", ["ls-files", "--others", "--exclude-standard"]);
     const allChanged = [...tracked, ...untracked];
     return allChanged.filter((file) => prefixes.some((prefix) => file.startsWith(prefix)));
+  }
+
+  private async changedScopeFiles(scope: string): Promise<string[]> {
+    const prefixes = this.scopeDirs(scope).map((dir) => dir.endsWith("/") ? dir : `${dir}/`);
+    return this.changedFilesUnderPrefixes(prefixes);
+  }
+
+  private filterChangedFiles(files: string[], changedRelativeFiles: string[]): string[] {
+    const changedAbsPaths = new Set(changedRelativeFiles.map((file) => resolve(this.projectRoot, file)));
+    return files.filter((file) => changedAbsPaths.has(file));
   }
 
   async stageFiles(scope: string): Promise<void> {

@@ -104,6 +104,42 @@ test("Boundary discovers source files when sourceDir and testDir are separate tr
   await boundary.verifyChangedFilesWithinScope("quiz/result");
 });
 
+test("Boundary separates colocated implementation and test files", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-boundary-colocated-"));
+  mkdirSync(join(root, "backend", "core", "ingestion", "infrastructure"), { recursive: true });
+  const implFile = join(root, "backend", "core", "ingestion", "infrastructure", "file_diff_detector.py");
+  const changedTestFile = join(root, "backend", "core", "ingestion", "infrastructure", "test_file_diff_detector.py");
+  const untouchedTestFile = join(root, "backend", "core", "ingestion", "infrastructure", "test_tagger.py");
+  writeFileSync(implFile, "VALUE = 1\n", "utf-8");
+  writeFileSync(changedTestFile, "def test_detector():\n    assert True\n", "utf-8");
+  writeFileSync(untouchedTestFile, "def test_tagger():\n    assert True\n", "utf-8");
+  initGitRepo(root);
+
+  writeFileSync(implFile, "VALUE = 2\n", "utf-8");
+  writeFileSync(changedTestFile, "def test_detector():\n    assert False\n", "utf-8");
+
+  const boundary = new Boundary(root, {
+    sourceDir: "backend/core/{{category}}/infrastructure",
+    testDir: "backend/core/{{category}}/infrastructure",
+    scopePattern: "backend/core/{{category}}/infrastructure/*",
+    additionalAllowedPrefixes: [".harness/reviews/"],
+  }, ["py"], ["__pycache__", ".venv"]);
+
+  assert.deepEqual(await boundary.findImplementationFiles("ingestion/file-diff-detector"), [implFile]);
+  assert.deepEqual(
+    (await boundary.findTestFiles("ingestion/file-diff-detector")).sort(),
+    [changedTestFile, untouchedTestFile].sort(),
+  );
+  assert.deepEqual(await boundary.findChangedImplementationFiles("ingestion/file-diff-detector"), [implFile]);
+  assert.deepEqual(await boundary.findChangedTestFiles("ingestion/file-diff-detector"), [changedTestFile]);
+
+  const testTools = boundary.testAllowedTools("ingestion/file-diff-detector");
+  assert.ok(testTools.includes("Write(backend/core/ingestion/infrastructure/test_*.py)"));
+  assert.ok(testTools.includes("Write(backend/core/ingestion/infrastructure/**/*_test.py)"));
+  assert.ok(testTools.includes("Write(backend/core/ingestion/infrastructure/**/*.spec.py)"));
+  assert.ok(!testTools.includes("Write(backend/core/ingestion/infrastructure/**)"));
+});
+
 test("Boundary stages and verifies changed files within scope", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-boundary-git-"));
   mkdirSync(join(root, "backend", "ingestion", "tests"), { recursive: true });

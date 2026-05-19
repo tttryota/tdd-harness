@@ -513,7 +513,7 @@ ${issueList}
     testPath: string,
     options?: { skipExternalReview?: boolean },
   ): Promise<void> {
-    const testFiles = await this.boundary.findTestFiles(plan.scope);
+    const testFiles = await this.boundary.findChangedTestFiles(plan.scope);
     if (testFiles.length === 0) return;
 
     console.log("テストレビュー実行中...");
@@ -527,7 +527,7 @@ ${issueList}
           throw new HarnessError(`テスト失敗: ${result.output}`);
         }
       },
-      rescanFiles: () => this.boundary.findTestFiles(plan.scope),
+      rescanFiles: () => this.boundary.findChangedTestFiles(plan.scope),
       scopeAllowedTools: this.boundary.testAllowedTools(plan.scope),
       getFileDiff: (files: string[]) => this.boundary.getFileDiff(files),
       reviewMode: "test",
@@ -579,7 +579,7 @@ ${issueList}
     criteriaPaths: string[],
     testPath: string,
   ): Promise<void> {
-    const implFiles = await this.boundary.findImplementationFiles(plan.scope);
+    const implFiles = await this.boundary.findChangedImplementationFiles(plan.scope);
     if (implFiles.length === 0) return;
 
     console.log("実装レビュー実行中...");
@@ -593,7 +593,7 @@ ${issueList}
           throw new HarnessError(`テスト失敗: ${result.output}`);
         }
       },
-      rescanFiles: () => this.boundary.findImplementationFiles(plan.scope),
+      rescanFiles: () => this.boundary.findChangedImplementationFiles(plan.scope),
       scopeAllowedTools: this.boundary.implAllowedTools(plan.scope),
       getFileDiff: (files: string[]) => this.boundary.getFileDiff(files),
       designDecisions: plan.designDecisions,

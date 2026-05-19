@@ -158,3 +158,39 @@ test("ImplFlow resolveCriteriaPaths rejects missing explicit criteria files", ()
     defaultFallbackNames: ["review-criteria-common", "review-criteria-backend"],
   }), GuardError);
 });
+
+test("ImplFlow reviews only changed test and implementation files", async () => {
+  const changedTestFile = "/tmp/test_file_diff_detector.py";
+  const changedImplFile = "/tmp/file_diff_detector.py";
+  const calls: any[] = [];
+  const boundary = {
+    getProjectRoot: () => "/tmp",
+    findChangedTestFiles: async () => [changedTestFile],
+    findChangedImplementationFiles: async () => [changedImplFile],
+    testAllowedTools: () => ["Read"],
+    implAllowedTools: () => ["Read"],
+  } as any;
+  const flow = new ImplFlow(boundary, {} as never, {} as never, {} as never, [], new DefaultFlowRuntimeFactory(), new LauncherToolExecutor());
+  const orchestrator = {
+    runReview: async (params: any) => {
+      calls.push(params);
+      return [];
+    },
+  } as any;
+  const plan = {
+    scope: "ingestion/file-diff-detector",
+    resolvedPaths: {
+      specPath: "/tmp/spec.md",
+      testCasesPath: "/tmp/cases.md",
+    },
+    targetTestCases: ["TC-01"],
+  } as any;
+
+  await (flow as any).runTestReview(orchestrator, plan, "backend/core/ingestion/infrastructure");
+  await (flow as any).runImplReview(orchestrator, plan, ["/tmp/criteria.md"], "backend/core/ingestion/infrastructure");
+
+  assert.deepEqual(calls[0].targetFiles, [changedTestFile]);
+  assert.deepEqual(await calls[0].rescanFiles(), [changedTestFile]);
+  assert.deepEqual(calls[1].targetFiles, [changedImplFile]);
+  assert.deepEqual(await calls[1].rescanFiles(), [changedImplFile]);
+});

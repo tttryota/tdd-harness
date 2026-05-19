@@ -18,6 +18,8 @@ export type ProjectBoundary = {
   findSourceFiles(scope: string): Promise<string[]>;
   findImplementationFiles(scope: string): Promise<string[]>;
   findTestFiles(scope: string): Promise<string[]>;
+  findChangedImplementationFiles(scope: string): Promise<string[]>;
+  findChangedTestFiles(scope: string): Promise<string[]>;
   findMisplacedTestFiles(scope: string): Promise<string[]>;
   testPathForScope(scope: string): string;
   scopeAllowedTools(scope: string): string[];
