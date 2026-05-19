@@ -64,6 +64,31 @@ description: TDD ハーネスの操作とワークフロー実行を支援する
 
 plan の詳細フォーマットは `/.harness/README.md` を正本とする。
 
+## 運用ガイド
+
+### design フロー生成物を ready にする前の確認
+
+- テストケース仕様書の `期待結果` に検証粒度が書かれているか確認する
+- ログ検証なら、イベント名、必須キー、期待値、件数制約、追加キー許容の有無を明示する
+- 例外検証なら、例外型、`message`、`cause chain`、ログ記録有無のうち何を確認するかを明示する
+- 値検証なら、`完全一致` / `含まれる` / `存在確認` を区別する
+- この粒度が曖昧なまま impl に進めると、`review-test-quality` が収束しにくい
+
+### plan の書き方
+
+- `対象テストケース` は 1 行に 1 件ずつ列挙する
+- `TC-01, TC-02` のように 1 行へ圧縮しない
+- diff_scope 見積もりが `targetTestCases.length` に依存するため、圧縮記法は不自然な DriftError の原因になる
+
+### impl フローで詰まったときの見方
+
+| エラー | 対処 |
+|---|---|
+| Codex タイムアウト | 一時障害の可能性が高い。`--resume` で再開する |
+| DriftError (`diff_scope`) | plan の `対象テストケース` の列挙方法を見直す |
+| DriftError (レビュー非収束) | impl を再試行する前に、テストケース仕様書の `期待結果` の粒度を見直す |
+| GuardError (スコープ外変更) | 不要な scope 外変更を戻して `--resume` する |
+
 ## skill と設定の関係
 
 - `profile.context.defaultSkills` と `profile.context.stepOverrides.<step>.skills` が runtime skill 名
