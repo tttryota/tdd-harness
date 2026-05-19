@@ -1,4 +1,5 @@
 import { existsSync, realpathSync, lstatSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { resolve, join, dirname, basename } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -16,6 +17,7 @@ export class FsProjectBoundary implements ProjectBoundary {
   private sourceLayout: ProjectBoundaryLayout;
   private fileExtensions: readonly string[];
   private excludeDirs: readonly string[];
+  private initialChangedFileDigests: Map<string, string | null> | null = null;
 
   constructor(
     projectRoot: string,
@@ -410,20 +412,46 @@ export class FsProjectBoundary implements ProjectBoundary {
   }
 
   async verifyChangedFilesWithinScope(scope: string): Promise<void> {
+    await this.ensureChangedFilesBaseline();
     const dirs = this.scopeDirs(scope);
     const allowedPrefixes = [
       ...dirs.map((d) => d.endsWith("/") ? d : `${d}/`),
       ...this.resolvedAdditionalAllowedPrefixes(),
     ];
-    const tracked = await this.gitListChangedFiles("git", ["diff", "--name-only", "HEAD"]);
-    const untracked = await this.gitListChangedFiles("git", ["ls-files", "--others", "--exclude-standard"]);
-    const allChanged = [...tracked, ...untracked];
+    const allChanged = await this.listChangedFiles();
     for (const file of allChanged) {
       const inScope = allowedPrefixes.some((prefix) => file.startsWith(prefix));
-      if (!inScope) {
+      if (!inScope && !this.isBaselineUnchanged(file)) {
         throw new GuardError(`スコープ外のファイルが変更されています: ${file}\n許可されたプレフィクス: ${allowedPrefixes.join(", ")}`);
       }
     }
+  }
+
+  private async ensureChangedFilesBaseline(): Promise<void> {
+    if (this.initialChangedFileDigests !== null) return;
+    const changedFiles = await this.listChangedFiles();
+    this.initialChangedFileDigests = new Map(
+      changedFiles.map((file) => [file, this.readFileDigest(file)]),
+    );
+  }
+
+  private async listChangedFiles(): Promise<string[]> {
+    const tracked = await this.gitListChangedFiles("git", ["diff", "--name-only", "HEAD"]);
+    const untracked = await this.gitListChangedFiles("git", ["ls-files", "--others", "--exclude-standard"]);
+    return [...tracked, ...untracked];
+  }
+
+  private isBaselineUnchanged(file: string): boolean {
+    if (this.initialChangedFileDigests === null) return false;
+    if (!this.initialChangedFileDigests.has(file)) return false;
+    return this.initialChangedFileDigests.get(file) === this.readFileDigest(file);
+  }
+
+  private readFileDigest(projectRelativePath: string): string | null {
+    const absolutePath = resolve(this.projectRoot, projectRelativePath);
+    if (!existsSync(absolutePath)) return null;
+    this.assertWithinProject(absolutePath);
+    return createHash("sha1").update(readFileSync(absolutePath)).digest("hex");
   }
 
   private async gitListChangedFiles(cmd: string, args: string[]): Promise<string[]> {

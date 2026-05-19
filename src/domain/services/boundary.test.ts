@@ -166,6 +166,27 @@ test("Boundary stages and verifies changed files within scope", async () => {
   );
 });
 
+test("Boundary ignores unchanged pre-existing out-of-scope files but still detects new drift", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-boundary-baseline-"));
+  mkdirSync(join(root, "backend", "ingestion", "tests"), { recursive: true });
+  mkdirSync(join(root, "plan"), { recursive: true });
+  writeFileSync(join(root, "backend", "ingestion", "mod.py"), "value = 1\n", "utf-8");
+  writeFileSync(join(root, "backend", "ingestion", "tests", "test_mod.py"), "def test_x():\n    assert True\n", "utf-8");
+  initGitRepo(root);
+
+  writeFileSync(join(root, "plan", "embedder.md"), "# plan\n", "utf-8");
+  const boundary = new Boundary(root);
+
+  writeFileSync(join(root, "backend", "ingestion", "mod.py"), "value = 2\n", "utf-8");
+  await boundary.verifyChangedFilesWithinScope("ingestion/chunk");
+
+  writeFileSync(join(root, "plan", "embedder.md"), "# updated plan\n", "utf-8");
+  await assert.rejects(
+    () => boundary.verifyChangedFilesWithinScope("ingestion/chunk"),
+    (error: unknown) => error instanceof GuardError && error.message.includes("plan/embedder.md"),
+  );
+});
+
 test("Boundary rejects project-external symlinks", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-boundary-symlink-"));
   mkdirSync(join(root, "frontend", "src", "quiz"), { recursive: true });
