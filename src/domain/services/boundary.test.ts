@@ -153,6 +153,10 @@ test("Boundary stages and verifies changed files within scope", async () => {
   await boundary.verifyChangedFilesWithinScope("ingestion/chunk");
   assert.match(await boundary.getCurrentCommitHash(), /^[0-9a-f]{40}$/);
   assert.equal(await boundary.countDiffLines(), 2);
+  assert.equal(
+    await boundary.countDiffLinesForFiles([join(root, "backend", "ingestion", "mod.py")]),
+    2,
+  );
   assert.match(await boundary.getFileDiff([join(root, "backend", "ingestion", "mod.py")]), /value = 2/);
 
   writeFileSync(join(root, "README.md"), "oops\n", "utf-8");
@@ -235,6 +239,7 @@ test("Boundary covers missing-plan fields, empty directories, and non-git fallba
   await assert.rejects(() => boundary.stageFiles("quiz/result"), GuardError);
   assert.equal(await boundary.getCurrentCommitHash(), "");
   await assert.rejects(() => boundary.countDiffLines(), GuardError);
+  await assert.rejects(() => boundary.countDiffLinesForFiles([]), GuardError);
   assert.equal(await boundary.getFileDiff([join(root, "backend", "quiz", "missing.py")]), "(git diff 取得失敗)");
   await assert.rejects(() => boundary.getFileDiff([join(root, "..", "outside.py")]), GuardError);
 

@@ -391,15 +391,17 @@ export class FsProjectBoundary implements ProjectBoundary {
   }
 
   async countDiffLines(): Promise<number> {
+    return this.countDiffLinesForFiles([]);
+  }
+
+  async countDiffLinesForFiles(files: string[]): Promise<number> {
     try {
-      const { stdout } = await execFileAsync("git", ["diff", "HEAD", "--stat"], { cwd: this.projectRoot, timeout: 30_000 });
-      const pattern = /(\d+) insertion|(\d+) deletion/g;
-      let total = 0;
-      let m: RegExpExecArray | null;
-      while ((m = pattern.exec(stdout)) !== null) {
-        total += parseInt(m[1] ?? m[2], 10);
-      }
-      return total;
+      const relFiles = this.toRelativeProjectPaths(files);
+      const args = relFiles.length > 0
+        ? ["diff", "HEAD", "--numstat", "--", ...relFiles]
+        : ["diff", "HEAD", "--numstat"];
+      const { stdout } = await execFileAsync("git", args, { cwd: this.projectRoot, timeout: 30_000 });
+      return this.sumNumstatLines(stdout);
     } catch (error: unknown) {
       const execError = error as { code?: string };
       if (execError.code === "ENOENT") throw new GuardError("git が見つかりません。");
@@ -441,10 +443,7 @@ export class FsProjectBoundary implements ProjectBoundary {
       this.assertWithinProject(resolve(this.projectRoot, f));
     }
     try {
-      const relFiles = files.map((f) => {
-        const abs = resolve(this.projectRoot, f);
-        return abs.startsWith(this.projectRoot) ? abs.slice(this.projectRoot.length + 1) : f;
-      });
+      const relFiles = this.toRelativeProjectPaths(files);
       const { stdout } = await execFileAsync("git", ["diff", "HEAD", "--", ...relFiles], {
         cwd: this.projectRoot,
         timeout: LOCAL_CMD_TIMEOUT_MS,
@@ -479,5 +478,26 @@ export class FsProjectBoundary implements ProjectBoundary {
     } catch {
       return false;
     }
+  }
+
+  private toRelativeProjectPaths(files: string[]): string[] {
+    return files.map((file) => {
+      const abs = resolve(this.projectRoot, file);
+      this.assertWithinProject(abs);
+      return abs.startsWith(this.projectRoot) ? abs.slice(this.projectRoot.length + 1) : file;
+    });
+  }
+
+  private sumNumstatLines(output: string): number {
+    let total = 0;
+    for (const line of output.split("\n")) {
+      if (!line.trim()) continue;
+      const [added, deleted] = line.split("\t", 3);
+      const addedNum = Number.parseInt(added ?? "", 10);
+      const deletedNum = Number.parseInt(deleted ?? "", 10);
+      if (!Number.isNaN(addedNum)) total += addedNum;
+      if (!Number.isNaN(deletedNum)) total += deletedNum;
+    }
+    return total;
   }
 }

@@ -145,3 +145,103 @@ test("ImplFlow runs through RED to GREEN and generates a report", async () => {
   const reportFiles = execFileSync("find", [reportsDir, "-type", "f", "-name", "*.md"]).toString("utf-8");
   assert.match(reportFiles, /\.md/);
 });
+
+test("ImplFlow diff_scope ignores large test diffs when implementation diff is small", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-impl-flow-diff-scope-"));
+  mkdirSync(join(root, "backend", "ingestion", "tests"), { recursive: true });
+  mkdirSync(join(root, "docs", "spec", "ingestion"), { recursive: true });
+  mkdirSync(join(root, "tests", "test-cases", "ingestion"), { recursive: true });
+  writeFileSync(join(root, "docs", "spec", "ingestion", "chunk.md"), "---\nstatus: approved\n---\n", "utf-8");
+  writeFileSync(join(root, "tests", "test-cases", "ingestion", "chunk.md"), "---\nstatus: approved\n---\n", "utf-8");
+  initGitRepo(root);
+
+  const profile = {
+    toolRoot: root,
+    exec: [],
+    reviewCriteria: [],
+    criteriaPreset: "backend",
+    sourceLayout: {
+      sourceDir: "backend/{{category}}",
+      testDir: "backend/{{category}}/tests",
+      scopePattern: "backend/{{category}}/*",
+      additionalAllowedPrefixes: [".harness/reviews/", ".harness/logs/"],
+    },
+  } as any;
+  const boundary = new Boundary(root, profile.sourceLayout, ["ts"], []);
+  const registry = {
+    getConfig() {
+      return { runners: { codex: { type: "codex" } }, templates: {} };
+    },
+    getStepMapping() {
+      return {
+        [FLOW_STEP.TEST_EXTERNAL_REVIEW]: "codex",
+        [FLOW_STEP.IMPL_EXTERNAL_REVIEW]: "codex",
+      };
+    },
+    isStepSkipped() {
+      return false;
+    },
+    getRunner(step: string) {
+      return {
+        async run() {
+          if (step === FLOW_STEP.TEST_GENERATE) {
+            writeFileSync(join(root, "backend", "ingestion", "tests", "chunk.test.ts"), "FAIL\n", "utf-8");
+            return {
+              text: JSON.stringify({
+                decision: "updated",
+                why: ["added"],
+                covered_test_cases: ["case"],
+                updated_test_cases: ["case"],
+                notes: [],
+              }),
+              sessionId: "session-1",
+            };
+          }
+          if (step === FLOW_STEP.IMPL_GENERATE) {
+            const largePassingTest = Array.from({ length: 160 }, (_, index) => `PASS ${index}`).join("\n");
+            writeFileSync(join(root, "backend", "ingestion", "chunk.ts"), "export const chunk = true;\n", "utf-8");
+            writeFileSync(join(root, "backend", "ingestion", "tests", "chunk.test.ts"), `${largePassingTest}\n`, "utf-8");
+            return {
+              text: JSON.stringify({
+                decision: "updated",
+                why: ["implemented"],
+                covered_requirements: ["req"],
+                updated_requirements: ["req"],
+                notes: [],
+              }),
+              sessionId: "session-1",
+            };
+          }
+          if (step === FLOW_STEP.JUDGMENT_SUMMARY) {
+            return { text: "summary" };
+          }
+          return {
+            text: "{\"checklist\":[{\"item\":\"ok\",\"verdict\":\"pass\",\"evidence\":\"done\"}],\"issues\":[]}",
+            sessionId: "session-1",
+          };
+        },
+      };
+    },
+  } as any;
+
+  const flow = new ImplFlow(boundary, registry, profile, fakeTestAdapter(), [], new DefaultFlowRuntimeFactory(), new LauncherToolExecutor());
+  const plan = {
+    type: "impl",
+    profile: "backend",
+    scope: "ingestion/chunk",
+    specPath: "docs/spec/ingestion/chunk.md",
+    testCasesPath: "tests/test-cases/ingestion/chunk.md",
+    description: "impl",
+    targets: [],
+    dependencies: [],
+    browserScenarios: [],
+    targetTestCases: ["case"],
+    exclusions: [],
+    completionCriteria: [],
+    designDecisions: ["keep it simple"],
+  } as any;
+
+  await flow.run("plan.md", { plan });
+
+  assert.match(readFileSync(join(root, "backend", "ingestion", "chunk.ts"), "utf-8"), /chunk = true/);
+});

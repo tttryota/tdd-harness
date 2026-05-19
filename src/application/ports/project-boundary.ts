@@ -29,5 +29,6 @@ export type ProjectBoundary = {
   verifyChangedFilesWithinScope(scope: string): Promise<void>;
   getCurrentCommitHash(): Promise<string>;
   countDiffLines(): Promise<number>;
+  countDiffLinesForFiles(files: string[]): Promise<number>;
   getFileDiff(files: string[]): Promise<string>;
 };

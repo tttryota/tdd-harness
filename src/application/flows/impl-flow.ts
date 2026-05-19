@@ -420,8 +420,17 @@ export class ImplFlow {
       if (greenResult.passed) {
         driftGuard.checkTimeout();
 
-        const diffLines = await this.boundary.countDiffLines();
-        driftGuard.checkDiffScope(diffLines);
+        const changedImplFiles = await this.boundary.findChangedImplementationFiles(plan.scope);
+        const changedTestFiles = await this.boundary.findChangedTestFiles(plan.scope);
+        const implDiffLines = await this.boundary.countDiffLinesForFiles(changedImplFiles);
+        const testDiffLines = await this.boundary.countDiffLinesForFiles(changedTestFiles);
+        logger.log(EVENT.GUARD_CHECK, {
+          scope: plan.scope,
+          result: "pass",
+          implDiffLines,
+          testDiffLines,
+        });
+        driftGuard.checkDiffScope(implDiffLines);
 
         logger.saveCheckpoint({
           planPath, completedStep: "green_confirmed", sessionId,
