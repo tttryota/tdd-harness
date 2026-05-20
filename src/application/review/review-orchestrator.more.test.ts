@@ -306,7 +306,7 @@ test("reviewStep applies fixes for manual major issues", async () => {
   assert.deepEqual(fixedIssues.map((issue) => issue.description), ["[manual] changing validation order is required"]);
 });
 
-test("reviewStep logs review_result summaries with severity and manual counts", async () => {
+test("reviewStep logs review_result summaries with findings detail", async () => {
   const { orchestrator, specPath, logger } = createOrchestrator();
   const anyOrchestrator = orchestrator as any;
   let calls = 0;
@@ -353,8 +353,23 @@ test("reviewStep logs review_result summaries with severity and manual counts", 
     severityCounts: { critical: 0, major: 1, minor: 1 },
     manualCount: 1,
     decision: "fixed",
+    findings: [
+      { severity: "major", description: "must fix" },
+      { severity: "minor", description: "[manual] can wait" },
+    ],
   });
-  assert.equal(reviewEvents[1]?.decision, "lgtm");
+  assert.deepEqual(reviewEvents[1], {
+    ts: reviewEvents[1].ts,
+    event: EVENT.REVIEW_RESULT,
+    step: "self_criteria",
+    cycle: 2,
+    reviewer: "self_criteria",
+    issueCount: 0,
+    severityCounts: { critical: 0, major: 0, minor: 0 },
+    manualCount: 0,
+    decision: "lgtm",
+    findings: [],
+  });
 });
 
 test("parseFixPlan fails closed when repairs omit an issue", () => {

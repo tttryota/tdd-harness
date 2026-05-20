@@ -1164,6 +1164,10 @@ ${globalConstraints}`;
       severityCounts: this.summarizeSeverities(issues),
       manualCount: issues.filter((issue) => issue.description.trimStart().startsWith("[manual]")).length,
       decision,
+      findings: issues.map((issue) => ({
+        severity: issue.severity,
+        description: issue.description,
+      })),
     });
   }
 
