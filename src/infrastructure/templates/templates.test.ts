@@ -76,6 +76,10 @@ test("loadTemplate falls back to bundled templates and throws for missing names"
   assert.match(reviewImplCriteriaTemplate, /モジュール構成/);
   assert.match(reviewImplCriteriaTemplate, /新規ファイル作成やファイル分割を伴う構造再設計は要求しない/);
   assert.match(reviewImplCriteriaTemplate, /行数だけを根拠にした分割要求はしない/);
+  assert.match(reviewImplCriteriaTemplate, /最後の手段/);
+  assert.match(reviewImplCriteriaTemplate, /major \/ critical のみに使う/);
+  assert.match(reviewImplCriteriaTemplate, /minor には付けない/);
+  assert.match(reviewImplCriteriaTemplate, /境界条件.*技術判断/);
   assert.throws(() => loadTemplate("missing-template", root), HarnessError);
 });
 
