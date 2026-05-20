@@ -73,6 +73,7 @@ test("loadTemplate falls back to bundled templates and throws for missing names"
   assert.match(implRetryTemplate, /モジュール構成/);
   assert.match(implRetryTemplate, /新しいファイル構成やモジュール分割を、その場の判断で発明しない/);
   const reviewImplCriteriaTemplate = loadTemplate("review-impl-criteria", root);
+  assert.match(reviewImplCriteriaTemplate, /## 仕様書/);
   assert.match(reviewImplCriteriaTemplate, /モジュール構成/);
   assert.match(reviewImplCriteriaTemplate, /新規ファイル作成やファイル分割を伴う構造再設計は要求しない/);
   assert.match(reviewImplCriteriaTemplate, /行数だけを根拠にした分割要求はしない/);
@@ -80,6 +81,7 @@ test("loadTemplate falls back to bundled templates and throws for missing names"
   assert.match(reviewImplCriteriaTemplate, /major \/ critical のみに使う/);
   assert.match(reviewImplCriteriaTemplate, /minor には付けない/);
   assert.match(reviewImplCriteriaTemplate, /境界条件.*技術判断/);
+  assert.match(reviewImplCriteriaTemplate, /スコープ外/);
   assert.throws(() => loadTemplate("missing-template", root), HarnessError);
 });
 

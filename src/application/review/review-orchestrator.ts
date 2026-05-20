@@ -131,7 +131,7 @@ export class ReviewOrchestrator {
 
   async runImplementationCriteriaReview(params: ReviewParams): Promise<ReviewResult> {
     return this.reviewStep(
-      () => this.selfReviewCriteria(params.targetFiles, params.criteriaPaths),
+      () => this.selfReviewCriteria(params.targetFiles, params.criteriaPaths, params.specPath),
       params,
     );
   }
@@ -509,15 +509,17 @@ export class ReviewOrchestrator {
   private async selfReviewCriteria(
     targetFiles: string[],
     criteriaPaths: string[],
+    specPath: string,
   ): Promise<ReviewResult> {
     const fileContents = this.readFiles(targetFiles);
+    const spec = readFileSync(specPath, "utf-8");
     const criteria = criteriaPaths
       .map((p) => readFileSync(p, "utf-8"))
       .join("\n\n");
     const config = this.registry.getConfig();
     const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
     const template = loadTemplate("review-impl-criteria", this.projectRoot, config.templates);
-    const prompt = renderTemplate(template, { fileContents, responseFormat });
+    const prompt = renderTemplate(template, { fileContents, spec, responseFormat });
 
     this.logger.log(EVENT.SELF_REVIEW, { step: "criteria" });
     // Pass criteria as appendSystemPrompt option

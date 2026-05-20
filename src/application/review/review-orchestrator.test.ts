@@ -113,6 +113,56 @@ test("ReviewOrchestrator skips external test review when skipExternalReview is s
   assert.equal(reviewCalls, 0);
 });
 
+test("ReviewOrchestrator includes spec content in implementation criteria review", async () => {
+  const workspace = mkdtempSync(join(tmpdir(), "harness-review-criteria-spec-"));
+  const targetFile = join(workspace, "target.ts");
+  const specFile = join(workspace, "spec.md");
+  const criteriaFile = join(workspace, "criteria.md");
+  writeFileSync(targetFile, "export const value = 1;\n", "utf-8");
+  writeFileSync(specFile, "# spec\n\n## スコープ外\n- do not require rollback\n", "utf-8");
+  writeFileSync(criteriaFile, "# criteria\n", "utf-8");
+
+  let prompt = "";
+  let appendSystemPrompt = "";
+  const runner: Runner = {
+    name: "codex",
+    capabilities: new Set(),
+    async run(request) {
+      prompt = request.prompt;
+      appendSystemPrompt = request.appendSystemPrompt ?? "";
+      return { text: "{\"checklist\":[{\"item\":\"criteria\",\"verdict\":\"pass\",\"evidence\":\"checked target.ts\"}],\"issues\":[]}" };
+    },
+    async review() {
+      return { text: "{\"checklist\":[{\"item\":\"criteria\",\"verdict\":\"pass\",\"evidence\":\"checked target.ts\"}],\"issues\":[]}" };
+    },
+  };
+
+  const registry = {
+    getRunner() {
+      return runner;
+    },
+    getConfig() {
+      return { templates: {} };
+    },
+  } as any;
+
+  const logger = new HarnessLogger("review-criteria-spec", { baseDir: workspace });
+  const orchestrator = new ReviewOrchestrator(logger, {} as never, workspace, registry);
+  const result = await orchestrator.runImplementationCriteriaReview({
+    targetFiles: [targetFile],
+    specPath: specFile,
+    criteriaPaths: [criteriaFile],
+    scopeAllowedTools: [],
+    reviewMode: "implementation",
+  } as any);
+
+  assert.equal(result.isLgtm, true);
+  assert.match(prompt, /## 仕様書/);
+  assert.match(prompt, /## スコープ外/);
+  assert.match(prompt, /do not require rollback/);
+  assert.match(appendSystemPrompt, /# criteria/);
+});
+
 test("parseReviewResult fails closed when checklist is missing", () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-review-parse-"));
   const logger = new HarnessLogger("review-parse-test", { baseDir: workspace });
