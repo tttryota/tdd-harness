@@ -64,6 +64,53 @@ const MINOR_ACCEPTANCE_SCHEMA = {
 
 const MANUAL_FIX_PREFIX = "[manual]";
 
+const FIX_PLAN_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["summary", "repairs", "global_constraints"],
+  properties: {
+    summary: { type: "string" },
+    repairs: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["goal", "files", "instructions", "constraints", "related_issues"],
+        properties: {
+          goal: { type: "string" },
+          files: { type: "array", minItems: 1, items: { type: "string" } },
+          instructions: { type: "array", minItems: 1, items: { type: "string" } },
+          constraints: { type: "array", items: { type: "string" } },
+          related_issues: {
+            type: "array",
+            minItems: 1,
+            items: { type: "integer", minimum: 1 },
+          },
+        },
+      },
+    },
+    global_constraints: {
+      type: "array",
+      items: { type: "string" },
+    },
+  },
+} as const;
+
+type FixPlanRepair = {
+  goal: string;
+  files: string[];
+  instructions: string[];
+  constraints: string[];
+  relatedIssueIndexes: number[];
+};
+
+type FixPlan = {
+  summary: string;
+  repairs: FixPlanRepair[];
+  globalConstraints: string[];
+};
+
 type ReviewParams = {
   targetFiles: string[];
   specPath: string;
@@ -900,41 +947,8 @@ export class ReviewOrchestrator {
     issues: ReviewIssue[],
     params: ReviewParams,
   ): Promise<void> {
-    const issueList = issues
-      .map(
-        (i, idx) =>
-          `${idx + 1}. [${i.severity}] ${i.file}:${i.line ?? "?"} - ${i.description}`,
-      )
-      .join("\n");
-
-    const hasBugFix = issues.some(
-      (i) => i.severity === "critical" || i.severity === "major",
-    );
-    const constraint = hasBugFix
-      ? `- このターンでは指摘一覧の全項目を一度に解消する
-- 仕様書に記載された振る舞いに合致させること
-- 同じ原因・同じパターンの未修正箇所が同一ファイル内に残らないか確認する
-- 既存の制御フロー、検証順序、try/except や catch の境界、例外型、戻り値条件を変えない
-- 新しいファイル、型定義、クラス、関数抽出、広い定数化などの構造変更はしない
-- 指摘一覧に含まれていない minor の cleanup には手を広げない
-- 既存テストが壊れた場合はテストも修正する`
-      : `- このターンでは指摘一覧の全項目を一度に解消する
-- 既存テストを壊さない
-- 同じ原因・同じパターンの未修正箇所が同一ファイル内に残らないか確認する
-- 振る舞いを変えない（リファクタリングのみ）`;
-
-    const prompt = `以下のレビュー指摘を修正してください。
-
-## 指摘一覧
-${issueList}
-
-## 制約
-${constraint}`;
-
-    await this.executeRun(FLOW_STEP.APPLY_FIXES, prompt, {
-      allowedTools: params.scopeAllowedTools,
-      cwd: this.projectRoot,
-    });
+    const plan = await this.planFixes(issues, params);
+    await this.executeFixPlan(plan, issues, params);
 
     // 修正でファイルが追加された可能性があるので再スキャン
     if (params.rescanFiles) {
@@ -982,6 +996,96 @@ ${lintIssueList}
     }
   }
 
+  private async planFixes(
+    issues: ReviewIssue[],
+    params: ReviewParams,
+  ): Promise<FixPlan> {
+    const issueList = issues
+      .map(
+        (i, idx) =>
+          `${idx + 1}. [${i.severity}] ${i.file}:${i.line ?? "?"} - ${i.description}`,
+      )
+      .join("\n");
+    const prompt = `以下のレビュー指摘に対して、一括修正のための計画を作成してください。
+
+## 指摘一覧
+${issueList}
+
+## 前提
+- すべての指摘を対象にした計画を返す。指摘を落とさない
+- 同じ原因・同じパターンの指摘は 1 repair にまとめてよい
+- issue 間の依存関係と修正順序を明示する
+- review issue を再分類して除外しない
+- \`[manual]\` が付いた指摘も停止理由にせず、必要な制約を plan に書く
+- 修正後の検証は既存の lint / test / 次サイクル review が担当する
+
+## 出力要件
+- summary: 全体方針を 1 文で要約
+- repairs: 実際に適用する修正群
+- 各 repair には goal, files, instructions, constraints, related_issues を含める
+- related_issues には上の指摘一覧の番号を 1 以上で列挙する
+- global_constraints には全体に適用される禁止事項を書く
+- repairs の related_issues を合算したとき、指摘一覧の全番号を 1 回以上含める
+- 空の plan は返さない`;
+
+    const rawPlan = await this.executeRun(FLOW_STEP.APPLY_FIXES, prompt, {
+      allowedTools: ["Read"],
+      cwd: this.projectRoot,
+      outputSchema: FIX_PLAN_SCHEMA,
+    });
+    return this.parseFixPlan(rawPlan, issues.length);
+  }
+
+  private async executeFixPlan(
+    plan: FixPlan,
+    issues: ReviewIssue[],
+    params: ReviewParams,
+  ): Promise<void> {
+    const issueList = issues
+      .map((i, idx) => `${idx + 1}. [${i.severity}] ${i.file}:${i.line ?? "?"} - ${i.description}`)
+      .join("\n");
+    const repairsText = plan.repairs
+      .map((repair, idx) => {
+        const instructions = repair.instructions.map((instruction) => `  - ${instruction}`).join("\n");
+        const constraints = repair.constraints.map((constraint) => `  - ${constraint}`).join("\n");
+        return `### Repair ${idx + 1}
+- goal: ${repair.goal}
+- files: ${repair.files.join(", ")}
+- related_issues: ${repair.relatedIssueIndexes.join(", ")}
+- instructions:
+${instructions}
+- constraints:
+${constraints || "  - なし"}`;
+      })
+      .join("\n\n");
+    const globalConstraints = plan.globalConstraints.map((constraint) => `- ${constraint}`).join("\n");
+    const prompt = `以下の修正計画に従ってコードを修正してください。
+
+## 修正計画 summary
+${plan.summary}
+
+## 修正対象 issue
+${issueList}
+
+## Repairs
+${repairsText}
+
+## Global Constraints
+${globalConstraints || "- なし"}
+
+## 実行ルール
+- 修正根拠は上の修正計画だけに限定する
+- plan に書かれていない cleanup や追加修正をしない
+- review issue を自分で再分類しない
+- 新しい設計変更や追加の \`[manual]\` 判断を発明しない
+- 既存の scope / allowedTools 制約を守る`;
+
+    await this.executeRun(FLOW_STEP.APPLY_FIXES, prompt, {
+      allowedTools: params.scopeAllowedTools,
+      cwd: this.projectRoot,
+    });
+  }
+
   private planIssuesForFixes(issues: ReviewIssue[]): {
     toFix: ReviewIssue[];
     manualBlocking: ReviewIssue[];
@@ -1005,6 +1109,76 @@ ${lintIssueList}
 
   private isManualFixIssue(issue: ReviewIssue): boolean {
     return issue.description.trimStart().startsWith(MANUAL_FIX_PREFIX);
+  }
+
+  private parseFixPlan(raw: string, expectedIssueCount: number): FixPlan {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new HarnessError("修正計画の JSON パースに失敗しました。");
+    }
+
+    if (!parsed || typeof parsed !== "object") {
+      throw new HarnessError("修正計画がオブジェクトではありません。");
+    }
+
+    const record = parsed as Record<string, unknown>;
+    if (typeof record.summary !== "string" || record.summary.length === 0) {
+      throw new HarnessError("修正計画の summary が不正です。");
+    }
+    if (!Array.isArray(record.global_constraints) || record.global_constraints.some((entry) => typeof entry !== "string")) {
+      throw new HarnessError("修正計画の global_constraints が不正です。");
+    }
+    if (!Array.isArray(record.repairs) || record.repairs.length === 0) {
+      throw new HarnessError("修正計画の repairs が不正です。");
+    }
+
+    const repairs: FixPlanRepair[] = record.repairs.map((entry, index) => {
+      if (!entry || typeof entry !== "object") {
+        throw new HarnessError(`修正計画の repairs[${index}] が不正です。`);
+      }
+      const repair = entry as Record<string, unknown>;
+      if (typeof repair.goal !== "string" || repair.goal.length === 0) {
+        throw new HarnessError(`修正計画の repairs[${index}].goal が不正です。`);
+      }
+      if (!Array.isArray(repair.files) || repair.files.length === 0 || repair.files.some((file) => typeof file !== "string")) {
+        throw new HarnessError(`修正計画の repairs[${index}].files が不正です。`);
+      }
+      if (!Array.isArray(repair.instructions) || repair.instructions.length === 0 || repair.instructions.some((instruction) => typeof instruction !== "string")) {
+        throw new HarnessError(`修正計画の repairs[${index}].instructions が不正です。`);
+      }
+      if (!Array.isArray(repair.constraints) || repair.constraints.some((constraint) => typeof constraint !== "string")) {
+        throw new HarnessError(`修正計画の repairs[${index}].constraints が不正です。`);
+      }
+      if (
+        !Array.isArray(repair.related_issues) ||
+        repair.related_issues.length === 0 ||
+        repair.related_issues.some((related) => typeof related !== "number" || !Number.isInteger(related) || related < 1 || related > expectedIssueCount)
+      ) {
+        throw new HarnessError(`修正計画の repairs[${index}].related_issues が不正です。`);
+      }
+      return {
+        goal: repair.goal,
+        files: repair.files as string[],
+        instructions: repair.instructions as string[],
+        constraints: repair.constraints as string[],
+        relatedIssueIndexes: repair.related_issues as number[],
+      };
+    });
+
+    const coveredIssueIndexes = new Set(repairs.flatMap((repair) => repair.relatedIssueIndexes));
+    for (let issueIndex = 1; issueIndex <= expectedIssueCount; issueIndex++) {
+      if (!coveredIssueIndexes.has(issueIndex)) {
+        throw new HarnessError(`修正計画が指摘 ${issueIndex} を取りこぼしています。`);
+      }
+    }
+
+    return {
+      summary: record.summary,
+      repairs,
+      globalConstraints: record.global_constraints as string[],
+    };
   }
 
   private parseReviewResult(reviewer: string, output: string): ReviewResult {

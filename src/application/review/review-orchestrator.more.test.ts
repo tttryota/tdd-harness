@@ -7,7 +7,7 @@ import { HarnessLogger } from "../../infrastructure/logging/logger.ts";
 import { ReviewOrchestrator } from "./review-orchestrator.ts";
 import type { ReviewIssue, ReviewResult } from "../../domain/model/types.ts";
 import type { LintViolation } from "../../domain/model/types.ts";
-import { DriftError } from "../../domain/model/types.ts";
+import { DriftError, HarnessError } from "../../domain/model/types.ts";
 
 function createOrchestrator() {
   const root = mkdtempSync(join(tmpdir(), "harness-review-more-"));
@@ -288,6 +288,25 @@ test("reviewStep escalates manual blocking issues", async () => {
   assert.equal(orchestrator.getRecords().at(-1)?.decision, "escalated");
 });
 
+test("parseFixPlan fails closed when repairs omit an issue", () => {
+  const { orchestrator } = createOrchestrator();
+
+  assert.throws(
+    () => (orchestrator as any).parseFixPlan(JSON.stringify({
+      summary: "fix selected issues",
+      repairs: [{
+        goal: "fix first issue",
+        files: ["target.ts"],
+        instructions: ["rename variable"],
+        constraints: [],
+        related_issues: [1],
+      }],
+      global_constraints: [],
+    }), 2),
+    HarnessError,
+  );
+});
+
 test("applyFixes reuses lint_fix during post-fix lint retries", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-review-lint-fix-"));
   const specPath = join(root, "spec.md");
@@ -326,8 +345,24 @@ test("applyFixes reuses lint_fix during post-fix lint retries", async () => {
 
   const orchestrator = new ReviewOrchestrator(logger, lintGuard, root, registry);
   const anyOrchestrator = orchestrator as any;
+  let executeRunCalls = 0;
   anyOrchestrator.executeRun = async (step: string, prompt: string) => {
+    executeRunCalls++;
     runnerCalls.push({ prompt: `${step}:${prompt}` });
+    if (executeRunCalls === 1) {
+      return JSON.stringify({
+        summary: "fix the reported issue",
+        repairs: [{
+          goal: "fix review issue",
+          files: ["src/file.py"],
+          instructions: ["update the reported code path"],
+          constraints: ["do not change unrelated logic"],
+          related_issues: [1],
+        }],
+        global_constraints: ["keep changes in scope"],
+      });
+    }
+    return "";
   };
 
   await anyOrchestrator.applyFixes(
@@ -347,8 +382,9 @@ test("applyFixes reuses lint_fix during post-fix lint retries", async () => {
 
   assert.equal(lintCheckCalls, 1);
   assert.equal(rescanCalls, 2);
-  assert.equal(runnerCalls.some((call) => /同じ原因・同じパターンの未修正箇所/.test(call.prompt)), true);
-  assert.equal(runnerCalls.some((call) => /新しいファイル、型定義、クラス、関数抽出、広い定数化などの構造変更はしない/.test(call.prompt)), true);
+  assert.equal(runnerCalls.some((call) => /修正計画/.test(call.prompt)), true);
+  assert.equal(runnerCalls.some((call) => /related_issues: 1/.test(call.prompt)), true);
+  assert.equal(runnerCalls.some((call) => /修正根拠は上の修正計画だけに限定する/.test(call.prompt)), true);
   assert.equal(runnerCalls.some((call) => /BLE001: blind except/.test(call.prompt)), true);
   assert.deepEqual(runnerCalls.at(-1)?.allowedTools, ["Write(src/*)"]);
 });
