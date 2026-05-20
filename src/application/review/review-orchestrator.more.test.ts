@@ -195,6 +195,41 @@ test("reviewStep fixes major issues and can retry unsafe minor issues", async ()
   assert.equal(result.isLgtm, true);
 });
 
+test("reviewStep defers minor fixes while major issues remain", async () => {
+  const { orchestrator, specPath } = createOrchestrator();
+  const anyOrchestrator = orchestrator as any;
+  const fixBatches: ReviewIssue[][] = [];
+  let calls = 0;
+  anyOrchestrator.applyFixes = async (issues: ReviewIssue[]) => { fixBatches.push(issues); };
+  anyOrchestrator.generateJudgmentSummary = async () => "summary";
+
+  const result = await anyOrchestrator.reviewStep(
+    async () => {
+      calls++;
+      return calls >= 2
+        ? { reviewer: "self_criteria", checklist: [], issues: [], isLgtm: true }
+        : {
+            reviewer: "self_criteria",
+            checklist: [],
+            issues: [major("must fix"), minor("can wait")],
+            isLgtm: false,
+          };
+    },
+    {
+      targetFiles: ["target.ts"],
+      scopeAllowedTools: [],
+      specPath,
+      getFileDiff: async () => "",
+      runTests: async () => {},
+      reviewMode: "implementation",
+    },
+  );
+
+  assert.equal(result.isLgtm, true);
+  assert.equal(fixBatches.length, 1);
+  assert.deepEqual(fixBatches[0]?.map((issue) => issue.description), ["must fix"]);
+});
+
 test("applyFixes reuses lint_fix during post-fix lint retries", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-review-lint-fix-"));
   const specPath = join(root, "spec.md");
@@ -254,6 +289,8 @@ test("applyFixes reuses lint_fix during post-fix lint retries", async () => {
 
   assert.equal(lintCheckCalls, 1);
   assert.equal(rescanCalls, 2);
+  assert.equal(runnerCalls.some((call) => /同じ原因・同じパターンの未修正箇所/.test(call.prompt)), true);
+  assert.equal(runnerCalls.some((call) => /新しいファイル、型定義、クラス、関数抽出、広い定数化などの構造変更はしない/.test(call.prompt)), true);
   assert.equal(runnerCalls.some((call) => /BLE001: blind except/.test(call.prompt)), true);
   assert.deepEqual(runnerCalls.at(-1)?.allowedTools, ["Write(src/*)"]);
 });

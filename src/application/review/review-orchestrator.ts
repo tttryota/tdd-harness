@@ -794,7 +794,7 @@ export class ReviewOrchestrator {
             return result;
           }
           // unsafe → 修正を再試行（1回のみ）
-          await this.applyFixes(result.issues, params);
+          await this.applyFixes(this.selectIssuesForFixes(result.issues), params);
           const retryResult = await reviewFn();
           const diffAfterRetry = params.getFileDiff
             ? await params.getFileDiff(params.targetFiles)
@@ -827,7 +827,7 @@ export class ReviewOrchestrator {
         }
       }
 
-      await this.applyFixes(result.issues, params);
+      await this.applyFixes(this.selectIssuesForFixes(result.issues), params);
 
       const diffAfter = params.getFileDiff
         ? await params.getFileDiff(params.targetFiles)
@@ -870,11 +870,16 @@ export class ReviewOrchestrator {
       (i) => i.severity === "critical" || i.severity === "major",
     );
     const constraint = hasBugFix
-      ? `- バグ修正の場合は振る舞いの変更を許可する
+      ? `- このターンでは指摘一覧の全項目を一度に解消する
 - 仕様書に記載された振る舞いに合致させること
+- 同じ原因・同じパターンの未修正箇所が同一ファイル内に残らないか確認する
+- 既存の制御フロー、検証順序、try/except や catch の境界、例外型、戻り値条件を変えない
+- 新しいファイル、型定義、クラス、関数抽出、広い定数化などの構造変更はしない
+- 指摘一覧に含まれていない minor の cleanup には手を広げない
 - 既存テストが壊れた場合はテストも修正する`
-      : `- 指摘された箇所のみ修正
+      : `- このターンでは指摘一覧の全項目を一度に解消する
 - 既存テストを壊さない
+- 同じ原因・同じパターンの未修正箇所が同一ファイル内に残らないか確認する
 - 振る舞いを変えない（リファクタリングのみ）`;
 
     const prompt = `以下のレビュー指摘を修正してください。
@@ -934,6 +939,14 @@ ${lintIssueList}
     if (params.reviewMode !== "test" && params.runTests) {
       await params.runTests();
     }
+  }
+
+  private selectIssuesForFixes(issues: ReviewIssue[]): ReviewIssue[] {
+    const blockingIssues = issues.filter((issue) => issue.severity === "critical" || issue.severity === "major");
+    if (blockingIssues.length > 0) {
+      return blockingIssues;
+    }
+    return issues;
   }
 
   private parseReviewResult(reviewer: string, output: string): ReviewResult {
