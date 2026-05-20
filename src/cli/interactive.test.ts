@@ -17,6 +17,7 @@ function stepMapping() {
     [FLOW_STEP.JUDGE_MINOR]: "codex",
     [FLOW_STEP.SPEC_GENERATE]: "codex",
     [FLOW_STEP.TEST_CASE_GENERATE]: "codex",
+    [FLOW_STEP.SPEC_TC_REVIEW]: "codex",
     [FLOW_STEP.COMPONENT_GENERATE]: "codex",
     [FLOW_STEP.COMPONENT_SELF_REVIEW]: "codex",
     [FLOW_STEP.PAGE_GENERATE]: "codex",

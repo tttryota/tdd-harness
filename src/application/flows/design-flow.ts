@@ -5,10 +5,11 @@ import type { ProjectBoundary } from "../ports/project-boundary.ts";
 import type { RunnerRegistry } from "../../infrastructure/runners/runner-registry.ts";
 import type { ResolvedProfileConfig } from "../../infrastructure/config/config.ts";
 import { FLOW_STEP } from "../../domain/model/steps.ts";
-import { GuardError } from "../../domain/model/types.ts";
+import { DriftError, GuardError } from "../../domain/model/types.ts";
 import { applyStepContext, joinPromptSections } from "../../infrastructure/runners/step-context.ts";
 import { loadTemplate } from "../../infrastructure/templates/templates.ts";
 import { isReadyLikeStatus } from "../policies/plan-readiness-policy.ts";
+import { ReviewOrchestrator } from "../review/review-orchestrator.ts";
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_SPEC_DIR_TEMPLATE = "docs/spec/{{category}}";
@@ -39,6 +40,8 @@ export class DesignFlow {
       category,
       name,
     );
+    const specPath = join(root, specDir, `${name}.md`);
+    const tcPath = join(root, testCaseDir, `${name}.md`);
 
     // design-flow の書き込み先を仕様書/テストケースディレクトリに限定
     const specAllowedTools = [
@@ -51,10 +54,25 @@ export class DesignFlow {
       `Write(${testCaseDir}/*)`,
       `Edit(${testCaseDir}/*)`,
     ];
+    const reviewAllowedTools = [
+      "Read",
+      `Write(${specDir}/*)`,
+      `Edit(${specDir}/*)`,
+      `Write(${testCaseDir}/*)`,
+      `Edit(${testCaseDir}/*)`,
+    ];
 
-    // 仕様書
-    const specPath = join(root, specDir, `${name}.md`);
-    if (existsSync(specPath)) {
+    const specExisted = existsSync(specPath);
+    const tcExisted = existsSync(tcPath);
+    const specReadyAtStart = specExisted && isReadyLikeStatus(this.boundary.readFrontmatter(specPath).status);
+    const tcReadyAtStart = tcExisted && isReadyLikeStatus(this.boundary.readFrontmatter(tcPath).status);
+
+    if (specReadyAtStart && tcReadyAtStart) {
+      console.log("仕様書・テストケースともに ready です。impl フローに進めます。");
+      return;
+    }
+
+    if (specExisted) {
       console.log(`仕様書は既に存在します: ${specPath}`);
     } else {
       await this.generateSpec(featureName, specPath, requirements, specAllowedTools, logger);
@@ -64,14 +82,6 @@ export class DesignFlow {
       console.log(`仕様書を生成しました: ${specPath}`);
     }
 
-    const specFm = this.boundary.readFrontmatter(specPath);
-    if (!isReadyLikeStatus(specFm.status)) {
-      console.log("仕様書を確認し、frontmatter の status を ready に更新してから再実行してください。");
-      return;
-    }
-
-    // テストケース
-    const tcPath = join(root, testCaseDir, `${name}.md`);
     if (existsSync(tcPath)) {
       console.log(`テストケースは既に存在します: ${tcPath}`);
     } else {
@@ -82,9 +92,12 @@ export class DesignFlow {
       console.log(`テストケースを生成しました: ${tcPath}`);
     }
 
+    await this.runSpecTcReview(specPath, tcPath, reviewAllowedTools, logger);
+
+    const specFm = this.boundary.readFrontmatter(specPath);
     const tcFm = this.boundary.readFrontmatter(tcPath);
-    if (!isReadyLikeStatus(tcFm.status)) {
-      console.log("テストケースを確認し、frontmatter の status を ready に更新してください。");
+    if (!isReadyLikeStatus(specFm.status) || !isReadyLikeStatus(tcFm.status)) {
+      console.log("spec_tc_review が完了しました。人間が仕様書・テストケースを確認し、frontmatter の status を ready に更新してください。");
       return;
     }
 
@@ -198,5 +211,41 @@ ${template}
       this.boundary.getProjectRoot(),
       this.registry.getConfig().templates,
     );
+  }
+
+  private async runSpecTcReview(
+    specPath: string,
+    testCasesPath: string,
+    scopeAllowedTools: string[],
+    logger: Logger,
+  ): Promise<void> {
+    const lintGuard = { async check() {} } as any;
+    const orchestrator = new ReviewOrchestrator(
+      logger,
+      lintGuard,
+      this.boundary.getProjectRoot(),
+      this.registry,
+      this.profile,
+    );
+
+    try {
+      await orchestrator.runSpecTcReview({
+        targetFiles: [specPath, testCasesPath],
+        specPath,
+        testCasesPath,
+        criteriaPaths: [],
+        scopeAllowedTools,
+        reviewMode: "design",
+      });
+    } catch (error: unknown) {
+      if (error instanceof DriftError) {
+        throw new DriftError(
+          error.level,
+          error.metric,
+          `spec_tc_review が失敗しました: ${error.message}`,
+        );
+      }
+      throw error;
+    }
   }
 }

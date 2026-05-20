@@ -21,6 +21,7 @@ function baseProfile() {
       [FLOW_STEP.JUDGE_MINOR]: "claude",
       [FLOW_STEP.SPEC_GENERATE]: "claude",
       [FLOW_STEP.TEST_CASE_GENERATE]: "claude",
+      [FLOW_STEP.SPEC_TC_REVIEW]: "claude",
       [FLOW_STEP.COMPONENT_GENERATE]: "generic",
       [FLOW_STEP.COMPONENT_SELF_REVIEW]: "claude",
       [FLOW_STEP.PAGE_GENERATE]: "generic",

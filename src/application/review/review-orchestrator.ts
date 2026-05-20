@@ -126,11 +126,12 @@ type ReviewParams = {
   scopeAllowedTools: string[];
   getFileDiff?: (files: string[]) => Promise<string>;
   designDecisions?: string[];
-  reviewMode: "test" | "implementation";
+  reviewMode: "test" | "implementation" | "design";
   reviewStep?: string;
   targetTestCases?: string[];
   skipExternalReview?: boolean;
   testCasesPath?: string;
+  maxReviewCycles?: number;
 };
 
 type PageReviewParams = ReviewParams & {
@@ -214,6 +215,18 @@ export class ReviewOrchestrator {
       }
       throw error;
     }
+  }
+
+  async runSpecTcReview(params: ReviewParams): Promise<ReviewResult> {
+    this.logger.log(EVENT.REVIEW_START, { mode: "design-1-step" });
+    return this.reviewStep(
+      () => this.selfReviewSpecTcConsistency(
+        params.targetFiles,
+        params.specPath,
+        params.testCasesPath ?? "",
+      ),
+      { ...params, reviewStep: "spec_tc_review", maxReviewCycles: 2 },
+    );
   }
 
   async runPageReview(params: PageReviewParams): Promise<ReviewResult[]> {
@@ -533,6 +546,32 @@ export class ReviewOrchestrator {
     });
   }
 
+  private async selfReviewSpecTcConsistency(
+    targetFiles: string[],
+    specPath: string,
+    testCasesPath: string,
+  ): Promise<ReviewResult> {
+    const fileContents = this.readFiles(targetFiles);
+    const spec = readFileSync(specPath, "utf-8");
+    const testCases = readFileSync(testCasesPath, "utf-8");
+    const config = this.registry.getConfig();
+    const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
+    const template = loadTemplate("review-spec-tc-consistency", this.projectRoot, config.templates);
+    const prompt = renderTemplate(template, {
+      fileContents,
+      spec,
+      testCases,
+      specPath,
+      testCasesPath,
+      responseFormat,
+    });
+
+    this.logger.log(EVENT.SELF_REVIEW, { step: "spec_tc_review" });
+    return this.executeReview(FLOW_STEP.SPEC_TC_REVIEW, prompt, "spec_tc_review", {
+      outputSchema: REVIEW_OUTPUT_SCHEMA,
+    });
+  }
+
   private async selfReviewCriteria(
     targetFiles: string[],
     criteriaPaths: string[],
@@ -762,7 +801,9 @@ export class ReviewOrchestrator {
   ): Promise<ReviewResult> {
     let minorOnlyCycles = 0;
 
-    for (let cycle = 0; cycle < RETRY_POLICY.review.maxCycles; cycle++) {
+    const maxCycles = params.maxReviewCycles ?? RETRY_POLICY.review.maxCycles;
+
+    for (let cycle = 0; cycle < maxCycles; cycle++) {
       const diffBefore = params.getFileDiff
         ? await params.getFileDiff(params.targetFiles)
         : "";
@@ -879,7 +920,7 @@ export class ReviewOrchestrator {
     throw new DriftError(
       ESCALATION_LEVEL.LEVEL_1,
       "review_cycle",
-      `レビューが ${RETRY_POLICY.review.maxCycles} サイクルで収束しませんでした`,
+      `レビューが ${maxCycles} サイクルで収束しませんでした`,
     );
   }
 

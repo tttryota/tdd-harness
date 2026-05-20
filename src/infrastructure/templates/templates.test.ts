@@ -51,6 +51,12 @@ test("loadTemplate falls back to bundled templates and throws for missing names"
   assert.match(reviewTestQualityTemplate, /sleep/);
   assert.match(reviewTestQualityTemplate, /wait\(timeout=\.\.\.\)/);
   assert.match(reviewTestQualityTemplate, /interval_seconds/);
+  const reviewSpecTcTemplate = loadTemplate("review-spec-tc-consistency", root);
+  assert.match(reviewSpecTcTemplate, /仕様書・テストケース整合性レビュー/);
+  assert.match(reviewSpecTcTemplate, /DTO \/ 入出力フィールドの振る舞い/);
+  assert.match(reviewSpecTcTemplate, /TC の「前提」欄の境界/);
+  assert.match(reviewSpecTcTemplate, /TC の「期待結果」の検証スコープ/);
+  assert.match(reviewSpecTcTemplate, /spec 未記載の振る舞いを TC が勝手に期待/);
   const testGenerateTemplate = loadTemplate("test-generate", root);
   assert.match(testGenerateTemplate, /except Exception/);
   assert.match(testGenerateTemplate, /broad exception 捕捉は使わない/);

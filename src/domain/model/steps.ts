@@ -11,6 +11,7 @@ export const FLOW_STEP = {
   JUDGE_MINOR: "judge_minor",
   SPEC_GENERATE: "spec_generate",
   TEST_CASE_GENERATE: "test_case_generate",
+  SPEC_TC_REVIEW: "spec_tc_review",
   COMPONENT_GENERATE: "component_generate",
   COMPONENT_SELF_REVIEW: "component_self_review",
   PAGE_GENERATE: "page_generate",

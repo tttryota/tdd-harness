@@ -366,6 +366,34 @@ test("reviewStep logs review_result summaries with findings detail", async () =>
   });
 });
 
+test("runSpecTcReview reuses reviewStep and applyFixes for design drafts", async () => {
+  const { orchestrator, specPath } = createOrchestrator();
+  const tcPath = join((orchestrator as any).projectRoot, "test-cases.md");
+  writeFileSync(tcPath, "# test cases\n", "utf-8");
+  const anyOrchestrator = orchestrator as any;
+  let calls = 0;
+  let fixCalls = 0;
+  anyOrchestrator.selfReviewSpecTcConsistency = async () => {
+    calls++;
+    return calls >= 2
+      ? { reviewer: "spec_tc_review", checklist: [], issues: [], isLgtm: true }
+      : { reviewer: "spec_tc_review", checklist: [], issues: [major("spec と TC が曖昧")], isLgtm: false };
+  };
+  anyOrchestrator.applyFixes = async () => { fixCalls++; };
+
+  const result = await orchestrator.runSpecTcReview({
+    targetFiles: [specPath, tcPath],
+    specPath,
+    testCasesPath: tcPath,
+    criteriaPaths: [],
+    scopeAllowedTools: [],
+    reviewMode: "design",
+  } as any);
+
+  assert.equal(result.isLgtm, true);
+  assert.equal(fixCalls, 1);
+});
+
 test("parseFixPlan fails closed when repairs omit an issue", () => {
   const { orchestrator } = createOrchestrator();
 
