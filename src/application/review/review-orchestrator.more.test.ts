@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HarnessLogger } from "../../infrastructure/logging/logger.ts";
 import { ReviewOrchestrator } from "./review-orchestrator.ts";
 import type { ReviewIssue, ReviewResult } from "../../domain/model/types.ts";
 import type { LintViolation } from "../../domain/model/types.ts";
-import { DriftError, HarnessError } from "../../domain/model/types.ts";
+import { DriftError, EVENT, HarnessError } from "../../domain/model/types.ts";
 
 function createOrchestrator() {
   const root = mkdtempSync(join(tmpdir(), "harness-review-more-"));
@@ -33,7 +33,7 @@ function createOrchestrator() {
     },
   } as any;
   const lintGuard = { async check() {} } as any;
-  return { root, specPath, orchestrator: new ReviewOrchestrator(logger, lintGuard, root, registry) };
+  return { root, specPath, logger, orchestrator: new ReviewOrchestrator(logger, lintGuard, root, registry) };
 }
 
 function major(description: string): ReviewIssue {
@@ -306,6 +306,57 @@ test("reviewStep applies fixes for manual major issues", async () => {
   assert.deepEqual(fixedIssues.map((issue) => issue.description), ["[manual] changing validation order is required"]);
 });
 
+test("reviewStep logs review_result summaries with severity and manual counts", async () => {
+  const { orchestrator, specPath, logger } = createOrchestrator();
+  const anyOrchestrator = orchestrator as any;
+  let calls = 0;
+  anyOrchestrator.applyFixes = async () => {};
+  anyOrchestrator.generateJudgmentSummary = async () => "summary";
+
+  const result = await anyOrchestrator.reviewStep(
+    async () => {
+      calls++;
+      return calls >= 2
+        ? { reviewer: "self_criteria", checklist: [], issues: [], isLgtm: true }
+        : {
+            reviewer: "self_criteria",
+            checklist: [],
+            issues: [major("must fix"), minor("[manual] can wait")],
+            isLgtm: false,
+          };
+    },
+    {
+      targetFiles: ["target.ts"],
+      scopeAllowedTools: [],
+      specPath,
+      getFileDiff: async () => "",
+      runTests: async () => {},
+      reviewMode: "implementation",
+      reviewStep: "criteria",
+    },
+  );
+
+  assert.equal(result.isLgtm, true);
+  const harnessEvents = readFileSync(join(logger.getLogDir(), "harness.jsonl"), "utf-8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  const reviewEvents = harnessEvents.filter((event) => event.event === EVENT.REVIEW_RESULT);
+  assert.equal(reviewEvents.length, 2);
+  assert.deepEqual(reviewEvents[0], {
+    ts: reviewEvents[0].ts,
+    event: EVENT.REVIEW_RESULT,
+    step: "self_criteria",
+    cycle: 1,
+    reviewer: "self_criteria",
+    issueCount: 2,
+    severityCounts: { critical: 0, major: 1, minor: 1 },
+    manualCount: 1,
+    decision: "fixed",
+  });
+  assert.equal(reviewEvents[1]?.decision, "lgtm");
+});
+
 test("parseFixPlan fails closed when repairs omit an issue", () => {
   const { orchestrator } = createOrchestrator();
 
@@ -492,4 +543,20 @@ test("applyFixes retries implementation fixes when post-fix tests fail", async (
   assert.equal(runnerCalls.some((call) => /apply_fixes の再試行 2\/3/.test(call.prompt)), true);
   assert.equal(runnerCalls.some((call) => /直前のテスト失敗/.test(call.prompt)), true);
   assert.equal(runnerCalls.some((call) => /テストコードや期待結果は変更しない/.test(call.prompt)), true);
+  const harnessEvents = readFileSync(join(logger.getLogDir(), "harness.jsonl"), "utf-8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  const applyFixTestRuns = harnessEvents.filter((event) => event.event === EVENT.TEST_RUN && event.phase === "apply_fixes");
+  assert.deepEqual(
+    applyFixTestRuns.map((event) => ({
+      reviewStep: event.reviewStep,
+      attempt: event.attempt,
+      result: event.result,
+    })),
+    [
+      { reviewStep: "unknown", attempt: 1, result: "FAILED" },
+      { reviewStep: "unknown", attempt: 2, result: "GREEN" },
+    ],
+  );
 });

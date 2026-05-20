@@ -159,6 +159,39 @@ export type ReviewRecord = {
   judgmentSummary: string;
 };
 
+export type ReviewDataStatus = "completed" | "failed";
+
+export type RunnerUsageTotalsShape = {
+  runs: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+};
+
+export type RunnerUsageSummaryShape = {
+  total: RunnerUsageTotalsShape;
+  byStep: Record<string, RunnerUsageTotalsShape>;
+};
+
+export type ReviewDataErrorMeta = {
+  name: string;
+  message: string;
+  metric?: string;
+  level?: EscalationLevel;
+};
+
+export type ImplReviewData = {
+  plan: TaskPlan;
+  records: ReviewRecord[];
+  tdd: {
+    greenAttempts: number;
+    alreadyGreen: boolean;
+  };
+  usageSummary: RunnerUsageSummaryShape;
+  status: ReviewDataStatus;
+  error?: ReviewDataErrorMeta;
+};
+
 // === コマンド実行結果 ===
 
 export type CommandResult = {
@@ -206,6 +239,7 @@ export const EVENT = {
   RUNNER_RATE_LIMITED: "runner_rate_limited",
   FALLBACK_REVIEW: "fallback_review",
   REVIEW_RECONCILED: "review_reconciled",
+  REVIEW_RESULT: "review_result",
   DRIFT_DETECTED: "drift_detected",
   ESCALATION_TO_HUMAN: "escalation_to_human",
   RUNNER_USAGE: "runner_usage",

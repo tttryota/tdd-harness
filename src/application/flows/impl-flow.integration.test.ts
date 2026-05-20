@@ -144,6 +144,12 @@ test("ImplFlow runs through RED to GREEN and generates a report", async () => {
   const reportsDir = join(root, ".harness", "reviews");
   const reportFiles = execFileSync("find", [reportsDir, "-type", "f", "-name", "*.md"]).toString("utf-8");
   assert.match(reportFiles, /\.md/);
+  const reviewDataPath = execFileSync("find", [join(root, ".harness", "logs"), "-type", "f", "-name", "review-data.json"])
+    .toString("utf-8")
+    .trim();
+  const reviewData = JSON.parse(readFileSync(reviewDataPath, "utf-8"));
+  assert.equal(reviewData.status, "completed");
+  assert.equal(reviewData.tdd.alreadyGreen, false);
 });
 
 test("ImplFlow diff_scope ignores large test diffs when implementation diff is small", async () => {

@@ -6,8 +6,8 @@ import type { FlowRuntimeFactory } from "../ports/flow-runtime-factory.ts";
 import type { ToolExecutor } from "../ports/tool-executor.ts";
 import type { RunnerRegistry } from "../../infrastructure/runners/runner-registry.ts";
 import { FLOW_STEP } from "../../domain/model/steps.ts";
-import { GuardError, HarnessError, ESCALATION_LEVEL, EVENT, STEP_ORDER } from "../../domain/model/types.ts";
-import type { TaskPlan, ReviewRecord, LintViolation, CompletedStep } from "../../domain/model/types.ts";
+import { DriftError, GuardError, HarnessError, ESCALATION_LEVEL, EVENT, STEP_ORDER } from "../../domain/model/types.ts";
+import type { TaskPlan, ReviewRecord, LintViolation, CompletedStep, ImplReviewData, ReviewDataErrorMeta, ReviewDataStatus } from "../../domain/model/types.ts";
 import type { ResolvedProfileConfig } from "../../infrastructure/config/config.ts";
 import type { LintAdapter, TestAdapter } from "../../infrastructure/tooling/tool-adapter.ts";
 import { loadTemplate, renderTemplate } from "../../infrastructure/templates/templates.ts";
@@ -218,6 +218,10 @@ export class ImplFlow {
     let sessionId = checkpoint?.sessionId ?? "";
     let testGenerationDecision = checkpoint?.testGenerationDecision ?? "updated";
     let greenAttempt = checkpoint?.greenAttempt ?? 0;
+    let alreadyGreen = false;
+    let runError: unknown = null;
+
+    try {
 
     if (resumeFrom) {
       console.log(`チェックポイントから再開: ${resumeFrom} 以降を実行`);
@@ -342,6 +346,7 @@ export class ImplFlow {
         // resume 時にテストが既に GREEN → 通常経路と同じくレビューのみ実行
         console.log("警告: テストが既にパスしています。実装生成をスキップしてレビューに進みます。");
         logger.log(EVENT.TEST_RUN, { result: "ALREADY_GREEN", output: rerunResult.output });
+        alreadyGreen = true;
         await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
         this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: 0, alreadyGreen: true });
         logger.clearCheckpoint();
@@ -358,6 +363,7 @@ export class ImplFlow {
       if (redResult.passed) {
         console.log("警告: テストが既にパスしています。実装生成をスキップしてレビューに進みます。");
         logger.log(EVENT.TEST_RUN, { result: "ALREADY_GREEN", output: redResult.output });
+        alreadyGreen = true;
         await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
         this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: 0, alreadyGreen: true });
         logger.clearCheckpoint();
@@ -513,6 +519,19 @@ export class ImplFlow {
         resumeFrom,
         alreadyGreen: false,
       });
+    }
+    } catch (error: unknown) {
+      runError = error;
+      throw error;
+    } finally {
+      this.saveImplReviewData(
+        logger,
+        plan,
+        reviewOrchestrator.getRecords(),
+        { greenAttempts: greenAttempt, alreadyGreen },
+        runError ? "failed" : "completed",
+        runError ? this.buildReviewDataErrorMeta(runError) : undefined,
+      );
     }
   }
 
@@ -817,9 +836,6 @@ ${issueList}
     const scopeSlug = plan.scope.replace(/\//g, "_");
     const usageSummary = logger.summarizeRunnerUsage();
 
-    // review-data.json を保存
-    logger.saveReviewData({ plan, records, tdd, usageSummary });
-
     // MD レポート生成
     // 集計対象: accepted を除いたレビュー実行レコードのみ
     const activeRecords = records.filter(
@@ -947,5 +963,45 @@ ${plan.targetTestCases.map((tc, i) => `${i + 1}. ${tc}`).join("\n")}
     const reportPath = join(reportsDir, `${timestamp}_${scopeSlug}.md`);
     writeFileSync(reportPath, md, "utf-8");
     console.log(`レポート生成: ${reportPath}`);
+  }
+
+  private saveImplReviewData(
+    logger: Logger,
+    plan: ValidatedImplPlan,
+    records: ReviewRecord[],
+    tdd: { greenAttempts: number; alreadyGreen: boolean },
+    status: ReviewDataStatus,
+    error?: ReviewDataErrorMeta,
+  ): void {
+    const payload: ImplReviewData = {
+      plan,
+      records,
+      tdd,
+      usageSummary: logger.summarizeRunnerUsage(),
+      status,
+      ...(error ? { error } : {}),
+    };
+    logger.saveReviewData(payload);
+  }
+
+  private buildReviewDataErrorMeta(error: unknown): ReviewDataErrorMeta {
+    if (error instanceof DriftError) {
+      return {
+        name: error.name,
+        message: error.message,
+        metric: error.metric,
+        level: error.level,
+      };
+    }
+    if (error instanceof Error) {
+      return {
+        name: error.name,
+        message: error.message,
+      };
+    }
+    return {
+      name: "UnknownError",
+      message: String(error),
+    };
   }
 }

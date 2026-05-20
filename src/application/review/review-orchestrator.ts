@@ -114,6 +114,7 @@ type FixRetryContext = {
   maxAttempts: number;
   previousPlan: FixPlan | null;
   lastTestFailureOutput: string | null;
+  reviewStep: string;
 };
 
 type ReviewParams = {
@@ -126,6 +127,7 @@ type ReviewParams = {
   getFileDiff?: (files: string[]) => Promise<string>;
   designDecisions?: string[];
   reviewMode: "test" | "implementation";
+  reviewStep?: string;
   targetTestCases?: string[];
   skipExternalReview?: boolean;
   testCasesPath?: string;
@@ -184,14 +186,14 @@ export class ReviewOrchestrator {
   async runImplementationCriteriaReview(params: ReviewParams): Promise<ReviewResult> {
     return this.reviewStep(
       () => this.selfReviewCriteria(params.targetFiles, params.criteriaPaths, params.specPath),
-      params,
+      { ...params, reviewStep: "criteria" },
     );
   }
 
   async runImplementationQualityReview(params: ReviewParams): Promise<ReviewResult> {
     return this.reviewStep(
       () => this.selfReviewQuality(params.targetFiles, params.specPath),
-      params,
+      { ...params, reviewStep: "quality" },
     );
   }
 
@@ -202,7 +204,7 @@ export class ReviewOrchestrator {
     try {
       return await this.reviewStep(
         () => this.externalImplementationReview(params.targetFiles, params.specPath, params.getFileDiff),
-        params,
+        { ...params, reviewStep: "external" },
       );
     } catch (error: unknown) {
       if (error instanceof RunnerRateLimitError) {
@@ -375,7 +377,7 @@ export class ReviewOrchestrator {
       () => this.selfReviewTestQuality(
         params.targetFiles, params.specPath, params.testCasesPath ?? "", params.targetTestCases ?? [],
       ),
-      params,
+      { ...params, reviewStep: "test_quality" },
     );
     results.push(step1Result);
 
@@ -392,7 +394,7 @@ export class ReviewOrchestrator {
             params.targetTestCases ?? [],
             params.getFileDiff,
           ),
-          params,
+          { ...params, reviewStep: "test_external" },
         );
         results.push(step2Result);
       } catch (error: unknown) {
@@ -795,6 +797,7 @@ export class ReviewOrchestrator {
       const result = await reviewFn();
 
       if (result.isLgtm) {
+        this.logReviewResultSummary(result.reviewer, cycle + 1, result.issues, "lgtm");
         this.records.push({
           step: result.reviewer,
           cycle: cycle + 1,
@@ -810,6 +813,7 @@ export class ReviewOrchestrator {
 
       // パース失敗等の擬似 issue は自動修正せずエスカレーション
       if (hasParseFailure(result.issues)) {
+        this.logReviewResultSummary(result.reviewer, cycle + 1, result.issues, "escalated");
         this.records.push({
           step: result.reviewer,
           cycle: cycle + 1,
@@ -835,6 +839,7 @@ export class ReviewOrchestrator {
             result.issues, diffBefore, params.specPath,
           );
           if (shouldAcceptMinorVerdict(minorOnlyCycles, verdict)) {
+            this.logReviewResultSummary(result.reviewer, cycle + 1, result.issues, "accepted");
             for (const issue of result.issues) {
               this.records.push({
                 step: result.reviewer,
@@ -851,11 +856,13 @@ export class ReviewOrchestrator {
           }
           // unsafe → 修正を再試行（1回のみ）
           await this.applyFixes(result.issues, params);
+          this.logReviewResultSummary(result.reviewer, cycle + 1, result.issues, "fixed");
           const retryResult = await reviewFn();
           const diffAfterRetry = params.getFileDiff
             ? await params.getFileDiff(params.targetFiles)
             : "";
           if (retryResult.isLgtm) {
+            this.logReviewResultSummary(retryResult.reviewer, cycle + 2, retryResult.issues, "lgtm");
             this.records.push({
               step: result.reviewer,
               cycle: cycle + 2,
@@ -869,6 +876,7 @@ export class ReviewOrchestrator {
             return retryResult;
           }
           // 修正後も残存 → escalated
+          this.logReviewResultSummary(retryResult.reviewer, cycle + 2, retryResult.issues, "escalated");
           this.records.push({
             step: result.reviewer,
             cycle: cycle + 2,
@@ -884,6 +892,7 @@ export class ReviewOrchestrator {
       }
 
       await this.applyFixes(result.issues, params);
+      this.logReviewResultSummary(result.reviewer, cycle + 1, result.issues, "fixed");
 
       const diffAfter = params.getFileDiff
         ? await params.getFileDiff(params.targetFiles)
@@ -924,6 +933,7 @@ export class ReviewOrchestrator {
         maxAttempts: RETRY_POLICY.applyFixes.maxAttempts,
         previousPlan,
         lastTestFailureOutput,
+        reviewStep: params.reviewStep ?? "unknown",
       };
       const plan = await this.planFixes(issues, params, retryContext);
       await this.executeFixPlan(plan, issues, params, retryContext);
@@ -973,8 +983,22 @@ ${lintIssueList}
       if (params.reviewMode !== "test" && params.runTests) {
         try {
           await params.runTests();
+          this.logger.log(EVENT.TEST_RUN, {
+            phase: "apply_fixes",
+            reviewStep: retryContext.reviewStep,
+            attempt,
+            result: "GREEN",
+            outputSummary: "",
+          });
         } catch (error: unknown) {
           const testFailureOutput = this.extractTestFailureOutput(error);
+          this.logger.log(EVENT.TEST_RUN, {
+            phase: "apply_fixes",
+            reviewStep: retryContext.reviewStep,
+            attempt,
+            result: "FAILED",
+            outputSummary: testFailureOutput ?? String(error),
+          });
           if (!testFailureOutput || attempt >= RETRY_POLICY.applyFixes.maxAttempts) {
             throw error;
           }
@@ -1124,6 +1148,33 @@ ${globalConstraints}`;
     if (!(error instanceof HarnessError)) return null;
     if (!error.message.startsWith("テスト失敗:")) return null;
     return error.message.replace(/^テスト失敗:\s*/, "").trim();
+  }
+
+  private logReviewResultSummary(
+    step: string,
+    cycle: number,
+    issues: ReviewIssue[],
+    decision: "accepted" | "escalated" | "fixed" | "lgtm",
+  ): void {
+    this.logger.log(EVENT.REVIEW_RESULT, {
+      step,
+      cycle,
+      reviewer: step,
+      issueCount: issues.length,
+      severityCounts: this.summarizeSeverities(issues),
+      manualCount: issues.filter((issue) => issue.description.trimStart().startsWith("[manual]")).length,
+      decision,
+    });
+  }
+
+  private summarizeSeverities(issues: ReviewIssue[]): Record<"critical" | "major" | "minor", number> {
+    return issues.reduce(
+      (counts, issue) => {
+        counts[issue.severity] += 1;
+        return counts;
+      },
+      { critical: 0, major: 0, minor: 0 },
+    );
   }
 
   private parseFixPlan(raw: string, expectedIssueCount: number): FixPlan {

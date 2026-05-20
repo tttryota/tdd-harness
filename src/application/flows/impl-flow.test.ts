@@ -331,11 +331,12 @@ test("ImplFlow stops when test generation requires contract revision", async () 
   writeFileSync(join(root, "tests", "test-cases", "feature.md"), "---\nstatus: approved\n---\n# cases\n", "utf-8");
 
   const checkpoints: Array<{ completedStep: string; testGenerationDecision?: string }> = [];
+  const reviewDataPayloads: unknown[] = [];
   const logger = {
     log() {},
     logCommand() {},
     logTranscript() {},
-    saveReviewData() {},
+    saveReviewData(data: unknown) { reviewDataPayloads.push(data); },
     saveCheckpoint(data: { completedStep: string; testGenerationDecision?: string }) { checkpoints.push(data); },
     loadCheckpoint() { return null; },
     clearCheckpoint() {},
@@ -435,4 +436,6 @@ test("ImplFlow stops when test generation requires contract revision", async () 
   assert.equal(checkpoints.length, 1);
   assert.equal(checkpoints[0]?.completedStep, "test_generated");
   assert.equal(checkpoints[0]?.testGenerationDecision, "contract_revision_required");
+  assert.equal((reviewDataPayloads[0] as any)?.status, "failed");
+  assert.match((reviewDataPayloads[0] as any)?.error?.message ?? "", /契約定義見直しが必要/);
 });
