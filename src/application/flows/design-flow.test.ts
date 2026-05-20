@@ -14,13 +14,15 @@ function createRegistry(
   root: string,
   options?: {
     generatedStatus?: "approved" | "draft";
-    reviewResponses?: string[];
+    specReviewResponses?: string[];
+    specTcReviewResponses?: string[];
     onApplyFixes?: (request: { prompt: string; allowedTools?: string[] }) => void;
   },
 ) {
   const requests: Array<{ step: string; allowedTools?: string[]; prompt: string }> = [];
   const generatedStatus = options?.generatedStatus ?? "draft";
-  const reviewResponses = [...(options?.reviewResponses ?? [])];
+  const specReviewResponses = [...(options?.specReviewResponses ?? [])];
+  const specTcReviewResponses = [...(options?.specTcReviewResponses ?? [])];
   return {
     requests,
     getConfig() {
@@ -30,9 +32,15 @@ function createRegistry(
       return {
         async run(request: { prompt: string; allowedTools?: string[] }) {
           requests.push({ step, allowedTools: request.allowedTools, prompt: request.prompt });
+          if (step === FLOW_STEP.SPEC_REVIEW) {
+            return {
+              text: specReviewResponses.shift()
+                ?? "{\"checklist\":[{\"item\":\"ok\",\"verdict\":\"pass\",\"evidence\":\"done\"}],\"issues\":[]}",
+            };
+          }
           if (step === FLOW_STEP.SPEC_TC_REVIEW) {
             return {
-              text: reviewResponses.shift()
+              text: specTcReviewResponses.shift()
                 ?? "{\"checklist\":[{\"item\":\"ok\",\"verdict\":\"pass\",\"evidence\":\"done\"}],\"issues\":[]}",
             };
           }
@@ -97,7 +105,7 @@ test("DesignFlow generates draft spec and test cases, then runs spec_tc_review",
   assert.match(readFileSync(join(root, "tests", "test-cases", "quiz", "result.md"), "utf-8"), /status: draft/);
   assert.deepEqual(
     registry.requests.map((request: { step: string }) => request.step),
-    [FLOW_STEP.SPEC_GENERATE, FLOW_STEP.TEST_CASE_GENERATE, FLOW_STEP.SPEC_TC_REVIEW],
+    [FLOW_STEP.SPEC_GENERATE, FLOW_STEP.SPEC_REVIEW, FLOW_STEP.TEST_CASE_GENERATE, FLOW_STEP.SPEC_TC_REVIEW],
   );
   assert.equal(logs.some((line) => line.includes("spec_tc_review が完了しました")), true);
 });
@@ -123,7 +131,7 @@ test("DesignFlow respects profile designLayout for output paths and allowed tool
     "Write(docs/spec/backend/quiz/*)",
     "Edit(docs/spec/backend/quiz/*)",
   ]);
-  assert.deepEqual(registry.requests[1]?.allowedTools, [
+  assert.deepEqual(registry.requests[2]?.allowedTools, [
     "Read",
     "Write(backend/quiz/docs/test-cases/*)",
     "Edit(backend/quiz/docs/test-cases/*)",
@@ -146,7 +154,7 @@ test("DesignFlow no longer blocks test-case generation on draft spec", async () 
   assert.match(readFileSync(join(root, "tests", "test-cases", "quiz", "result.md"), "utf-8"), /status: draft/);
   assert.deepEqual(
     registry.requests.map((request: { step: string }) => request.step),
-    [FLOW_STEP.TEST_CASE_GENERATE, FLOW_STEP.SPEC_TC_REVIEW],
+    [FLOW_STEP.SPEC_REVIEW, FLOW_STEP.TEST_CASE_GENERATE, FLOW_STEP.SPEC_TC_REVIEW],
   );
 });
 
@@ -163,15 +171,18 @@ test("DesignFlow falls back to bundled templates when project templates are abse
   assert.match(registry.requests[0]?.prompt ?? "", /# 具体例/);
   assert.match(registry.requests[0]?.prompt ?? "", /# 受け入れ基準/);
   assert.match(registry.requests[0]?.prompt ?? "", /各主要ルールに対して最低1つ/);
-  assert.match(registry.requests[1]?.prompt ?? "", /# 検証焦点/);
-  assert.match(registry.requests[1]?.prompt ?? "", /# 網羅性チェック/);
-  assert.match(registry.requests[1]?.prompt ?? "", /\[要仕様追記\]/);
-  assert.match(registry.requests[1]?.prompt ?? "", /受け入れ基準の各項目に対応するテストケース/);
-  assert.match(registry.requests[1]?.prompt ?? "", /テストの種類ごとに検証焦点を明示/);
-  assert.match(registry.requests[1]?.prompt ?? "", /対応関係を網羅性チェックセクションに記載/);
-  assert.match(registry.requests[2]?.prompt ?? "", /DTO \/ 入出力フィールドの振る舞い/);
-  assert.match(registry.requests[2]?.prompt ?? "", /TC の「前提」欄の境界/);
-  assert.match(registry.requests[2]?.prompt ?? "", /TC の「期待結果」の検証スコープ/);
+  assert.match(registry.requests[1]?.prompt ?? "", /仕様書整合性レビュー/);
+  assert.match(registry.requests[1]?.prompt ?? "", /公開 API の形状明示/);
+  assert.match(registry.requests[1]?.prompt ?? "", /テストダブルのシグネチャ決定可能性/);
+  assert.match(registry.requests[2]?.prompt ?? "", /# 検証焦点/);
+  assert.match(registry.requests[2]?.prompt ?? "", /# 網羅性チェック/);
+  assert.match(registry.requests[2]?.prompt ?? "", /\[要仕様追記\]/);
+  assert.match(registry.requests[2]?.prompt ?? "", /受け入れ基準の各項目に対応するテストケース/);
+  assert.match(registry.requests[2]?.prompt ?? "", /テストの種類ごとに検証焦点を明示/);
+  assert.match(registry.requests[2]?.prompt ?? "", /対応関係を網羅性チェックセクションに記載/);
+  assert.match(registry.requests[3]?.prompt ?? "", /DTO \/ 入出力フィールドの振る舞い/);
+  assert.match(registry.requests[3]?.prompt ?? "", /TC の「前提」欄の境界/);
+  assert.match(registry.requests[3]?.prompt ?? "", /TC の「期待結果」の検証スコープ/);
 });
 
 test("DesignFlow loads project template overrides from .harness/resources/templates", async () => {
@@ -187,7 +198,7 @@ test("DesignFlow loads project template overrides from .harness/resources/templa
   await flow.run("quiz/result", "結果ページを作る", logger);
 
   assert.match(registry.requests[0]?.prompt ?? "", /project spec template/);
-  assert.match(registry.requests[1]?.prompt ?? "", /project test-case template/);
+  assert.match(registry.requests[2]?.prompt ?? "", /project test-case template/);
 });
 
 test("DesignFlow passes combined spec and test-case scopes into apply_fixes during spec_tc_review", async () => {
@@ -195,7 +206,7 @@ test("DesignFlow passes combined spec and test-case scopes into apply_fixes duri
   const boundary = new Boundary(root);
   let applyFixesRequest: { prompt: string; allowedTools?: string[] } | null = null;
   const registry = createRegistry(root, {
-    reviewResponses: [
+    specTcReviewResponses: [
       "{\"checklist\":[{\"item\":\"scope\",\"verdict\":\"fail\",\"evidence\":\"missing\"}],\"issues\":[{\"file\":\"docs/spec/quiz/result.md\",\"line\":1,\"severity\":\"major\",\"description\":\"spec と TC が曖昧\"}]}",
       "{\"checklist\":[{\"item\":\"scope\",\"verdict\":\"pass\",\"evidence\":\"done\"}],\"issues\":[]}",
     ],
@@ -218,11 +229,55 @@ test("DesignFlow passes combined spec and test-case scopes into apply_fixes duri
   ]);
 });
 
+test("DesignFlow passes spec-only scope into apply_fixes during spec_review", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-design-flow-spec-review-fixes-"));
+  const boundary = new Boundary(root);
+  let applyFixesRequest: { prompt: string; allowedTools?: string[] } | null = null;
+  const registry = createRegistry(root, {
+    specReviewResponses: [
+      "{\"checklist\":[{\"item\":\"api\",\"verdict\":\"fail\",\"evidence\":\"missing\"}],\"issues\":[{\"file\":\"docs/spec/quiz/result.md\",\"line\":1,\"severity\":\"major\",\"description\":\"公開 API の形が未定義\"}]}",
+      "{\"checklist\":[{\"item\":\"api\",\"verdict\":\"pass\",\"evidence\":\"done\"}],\"issues\":[]}",
+    ],
+    onApplyFixes(request) {
+      applyFixesRequest = request;
+    },
+  });
+  const flow = new DesignFlow(boundary, registry);
+  const logger = new HarnessLogger("design-test-spec-review-fixes", { baseDir: root });
+
+  await flow.run("quiz/result", "結果ページを作る", logger);
+
+  assert.ok(applyFixesRequest);
+  assert.deepEqual((applyFixesRequest as { allowedTools?: string[] }).allowedTools, [
+    "Read",
+    "Write(docs/spec/quiz/*)",
+    "Edit(docs/spec/quiz/*)",
+  ]);
+});
+
+test("DesignFlow spec_review stops after two non-converging cycles", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-design-flow-spec-review-drift-"));
+  const boundary = new Boundary(root);
+  const registry = createRegistry(root, {
+    specReviewResponses: [
+      "{\"checklist\":[{\"item\":\"api\",\"verdict\":\"fail\",\"evidence\":\"missing\"}],\"issues\":[{\"file\":\"docs/spec/quiz/result.md\",\"line\":1,\"severity\":\"major\",\"description\":\"ambiguous api 1\"}]}",
+      "{\"checklist\":[{\"item\":\"api\",\"verdict\":\"fail\",\"evidence\":\"still missing\"}],\"issues\":[{\"file\":\"docs/spec/quiz/result.md\",\"line\":1,\"severity\":\"major\",\"description\":\"ambiguous api 2\"}]}",
+    ],
+  });
+  const flow = new DesignFlow(boundary, registry);
+  const logger = new HarnessLogger("design-test-spec-review-drift", { baseDir: root });
+
+  await assert.rejects(
+    () => flow.run("quiz/result", "結果ページを作る", logger),
+    DriftError,
+  );
+});
+
 test("DesignFlow spec_tc_review stops after two non-converging cycles", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-design-flow-drift-"));
   const boundary = new Boundary(root);
   const registry = createRegistry(root, {
-    reviewResponses: [
+    specTcReviewResponses: [
       "{\"checklist\":[{\"item\":\"scope\",\"verdict\":\"fail\",\"evidence\":\"missing\"}],\"issues\":[{\"file\":\"docs/spec/quiz/result.md\",\"line\":1,\"severity\":\"major\",\"description\":\"ambiguous 1\"}]}",
       "{\"checklist\":[{\"item\":\"scope\",\"verdict\":\"fail\",\"evidence\":\"still missing\"}],\"issues\":[{\"file\":\"tests/test-cases/quiz/result.md\",\"line\":1,\"severity\":\"major\",\"description\":\"ambiguous 2\"}]}",
     ],

@@ -132,6 +132,7 @@ type ReviewParams = {
   skipExternalReview?: boolean;
   testCasesPath?: string;
   maxReviewCycles?: number;
+  designContextText?: string;
 };
 
 type PageReviewParams = ReviewParams & {
@@ -226,6 +227,17 @@ export class ReviewOrchestrator {
         params.testCasesPath ?? "",
       ),
       { ...params, reviewStep: "spec_tc_review", maxReviewCycles: 2 },
+    );
+  }
+
+  async runSpecReview(params: ReviewParams): Promise<ReviewResult> {
+    this.logger.log(EVENT.REVIEW_START, { mode: "design-1-step" });
+    return this.reviewStep(
+      () => this.selfReviewSpecConsistency(
+        params.specPath,
+        params.designContextText ?? "",
+      ),
+      { ...params, reviewStep: "spec_review", maxReviewCycles: 2 },
     );
   }
 
@@ -568,6 +580,27 @@ export class ReviewOrchestrator {
 
     this.logger.log(EVENT.SELF_REVIEW, { step: "spec_tc_review" });
     return this.executeReview(FLOW_STEP.SPEC_TC_REVIEW, prompt, "spec_tc_review", {
+      outputSchema: REVIEW_OUTPUT_SCHEMA,
+    });
+  }
+
+  private async selfReviewSpecConsistency(
+    specPath: string,
+    designContextText: string,
+  ): Promise<ReviewResult> {
+    const spec = readFileSync(specPath, "utf-8");
+    const config = this.registry.getConfig();
+    const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
+    const template = loadTemplate("review-spec-consistency", this.projectRoot, config.templates);
+    const prompt = renderTemplate(template, {
+      spec,
+      specPath,
+      designContextText,
+      responseFormat,
+    });
+
+    this.logger.log(EVENT.SELF_REVIEW, { step: "spec_review" });
+    return this.executeReview(FLOW_STEP.SPEC_REVIEW, prompt, "spec_review", {
       outputSchema: REVIEW_OUTPUT_SCHEMA,
     });
   }

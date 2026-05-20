@@ -109,8 +109,11 @@ type LlmCommandDetail = {
 };
 
 const SUMMARY_STEP_ORDER: string[] = [
-  FLOW_STEP.TEST_GENERATE,
+  FLOW_STEP.SPEC_GENERATE,
+  FLOW_STEP.SPEC_REVIEW,
+  FLOW_STEP.TEST_CASE_GENERATE,
   FLOW_STEP.SPEC_TC_REVIEW,
+  FLOW_STEP.TEST_GENERATE,
   FLOW_STEP.TEST_SELF_QUALITY,
   FLOW_STEP.TEST_EXTERNAL_REVIEW,
   FLOW_STEP.IMPL_GENERATE,
@@ -123,6 +126,7 @@ const SUMMARY_STEP_ORDER: string[] = [
 ];
 
 const REVIEW_STEP_MAP: Record<string, string> = {
+  spec_review: FLOW_STEP.SPEC_REVIEW,
   spec_tc_review: FLOW_STEP.SPEC_TC_REVIEW,
   test_self_quality: FLOW_STEP.TEST_SELF_QUALITY,
   test_external: FLOW_STEP.TEST_EXTERNAL_REVIEW,
@@ -132,6 +136,9 @@ const REVIEW_STEP_MAP: Record<string, string> = {
 };
 
 const TEMPLATE_MAP: Partial<Record<FlowStep, string[]>> = {
+  [FLOW_STEP.SPEC_GENERATE]: ["spec-template"],
+  [FLOW_STEP.SPEC_REVIEW]: ["review-spec-consistency", "review-response-format"],
+  [FLOW_STEP.TEST_CASE_GENERATE]: ["test-case-template"],
   [FLOW_STEP.TEST_GENERATE]: ["test-generate"],
   [FLOW_STEP.SPEC_TC_REVIEW]: ["review-spec-tc-consistency", "review-response-format"],
   [FLOW_STEP.IMPL_GENERATE]: ["impl-generate", "impl-retry"],

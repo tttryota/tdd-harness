@@ -57,6 +57,12 @@ test("loadTemplate falls back to bundled templates and throws for missing names"
   assert.match(reviewSpecTcTemplate, /TC の「前提」欄の境界/);
   assert.match(reviewSpecTcTemplate, /TC の「期待結果」の検証スコープ/);
   assert.match(reviewSpecTcTemplate, /spec 未記載の振る舞いを TC が勝手に期待/);
+  const reviewSpecTemplate = loadTemplate("review-spec-consistency", root);
+  assert.match(reviewSpecTemplate, /仕様書整合性レビュー/);
+  assert.match(reviewSpecTemplate, /公開 API の形状明示/);
+  assert.match(reviewSpecTemplate, /モジュール構成パスと harness scope 整合性/);
+  assert.match(reviewSpecTemplate, /責務の分離可能性/);
+  assert.match(reviewSpecTemplate, /テストダブルのシグネチャ決定可能性/);
   const testGenerateTemplate = loadTemplate("test-generate", root);
   assert.match(testGenerateTemplate, /except Exception/);
   assert.match(testGenerateTemplate, /broad exception 捕捉は使わない/);

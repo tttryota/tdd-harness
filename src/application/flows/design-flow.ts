@@ -14,6 +14,9 @@ import { ReviewOrchestrator } from "../review/review-orchestrator.ts";
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_SPEC_DIR_TEMPLATE = "docs/spec/{{category}}";
 const DEFAULT_TEST_CASE_DIR_TEMPLATE = "tests/test-cases/{{category}}";
+const DEFAULT_SOURCE_DIR_TEMPLATE = "backend/{{category}}";
+const DEFAULT_SOURCE_TEST_DIR_TEMPLATE = "backend/{{category}}/tests";
+const DEFAULT_SCOPE_PATTERN_TEMPLATE = "backend/{{category}}/*";
 
 export class DesignFlow {
   private boundary: ProjectBoundary;
@@ -42,6 +45,7 @@ export class DesignFlow {
     );
     const specPath = join(root, specDir, `${name}.md`);
     const tcPath = join(root, testCaseDir, `${name}.md`);
+    const specReviewContext = this.buildSpecReviewContext(category, name);
 
     // design-flow の書き込み先を仕様書/テストケースディレクトリに限定
     const specAllowedTools = [
@@ -80,6 +84,11 @@ export class DesignFlow {
         throw new GuardError(`仕様書が生成されませんでした: ${specPath}`);
       }
       console.log(`仕様書を生成しました: ${specPath}`);
+    }
+
+    const specReadyAfterLoad = isReadyLikeStatus(this.boundary.readFrontmatter(specPath).status);
+    if (!specReadyAfterLoad) {
+      await this.runSpecReview(specPath, specAllowedTools, logger, specReviewContext);
     }
 
     if (existsSync(tcPath)) {
@@ -201,6 +210,29 @@ ${template}
     return existsSync(claudeMdPath) ? readFileSync(claudeMdPath, "utf-8") : "";
   }
 
+  private buildSpecReviewContext(category: string, name: string): string {
+    const sourceDir = this.resolveDesignDir(
+      this.profile?.sourceLayout?.sourceDir ?? DEFAULT_SOURCE_DIR_TEMPLATE,
+      category,
+      name,
+    );
+    const testDir = this.resolveDesignDir(
+      this.profile?.sourceLayout?.testDir ?? DEFAULT_SOURCE_TEST_DIR_TEMPLATE,
+      category,
+      name,
+    );
+    const scopePattern = this.resolveDesignDir(
+      this.profile?.sourceLayout?.scopePattern ?? DEFAULT_SCOPE_PATTERN_TEMPLATE,
+      category,
+      name,
+    );
+    return [
+      `- sourceDir: ${sourceDir}`,
+      `- testDir: ${testDir}`,
+      `- scopePattern: ${scopePattern}`,
+    ].join("\n");
+  }
+
   private resolveDesignDir(template: string, category: string, name: string): string {
     return template.replaceAll("{{category}}", category).replaceAll("{{name}}", name);
   }
@@ -243,6 +275,42 @@ ${template}
           error.level,
           error.metric,
           `spec_tc_review が失敗しました: ${error.message}`,
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async runSpecReview(
+    specPath: string,
+    scopeAllowedTools: string[],
+    logger: Logger,
+    designContextText: string,
+  ): Promise<void> {
+    const lintGuard = { async check() {} } as any;
+    const orchestrator = new ReviewOrchestrator(
+      logger,
+      lintGuard,
+      this.boundary.getProjectRoot(),
+      this.registry,
+      this.profile,
+    );
+
+    try {
+      await orchestrator.runSpecReview({
+        targetFiles: [specPath],
+        specPath,
+        criteriaPaths: [],
+        scopeAllowedTools,
+        reviewMode: "design",
+        designContextText,
+      });
+    } catch (error: unknown) {
+      if (error instanceof DriftError) {
+        throw new DriftError(
+          error.level,
+          error.metric,
+          `spec_review が失敗しました: ${error.message}`,
         );
       }
       throw error;

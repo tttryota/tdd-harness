@@ -394,6 +394,32 @@ test("runSpecTcReview reuses reviewStep and applyFixes for design drafts", async
   assert.equal(fixCalls, 1);
 });
 
+test("runSpecReview reuses reviewStep and applyFixes for draft specs", async () => {
+  const { orchestrator, specPath } = createOrchestrator();
+  const anyOrchestrator = orchestrator as any;
+  let calls = 0;
+  let fixCalls = 0;
+  anyOrchestrator.selfReviewSpecConsistency = async () => {
+    calls++;
+    return calls >= 2
+      ? { reviewer: "spec_review", checklist: [], issues: [], isLgtm: true }
+      : { reviewer: "spec_review", checklist: [], issues: [major("公開 API の形が曖昧")], isLgtm: false };
+  };
+  anyOrchestrator.applyFixes = async () => { fixCalls++; };
+
+  const result = await orchestrator.runSpecReview({
+    targetFiles: [specPath],
+    specPath,
+    criteriaPaths: [],
+    scopeAllowedTools: [],
+    reviewMode: "design",
+    designContextText: "- sourceDir: backend/quiz",
+  } as any);
+
+  assert.equal(result.isLgtm, true);
+  assert.equal(fixCalls, 1);
+});
+
 test("parseFixPlan fails closed when repairs omit an issue", () => {
   const { orchestrator } = createOrchestrator();
 

@@ -28,6 +28,7 @@ function baseYaml(): string {
       apply_fixes: codex
       judge_minor: codex
       spec_generate: codex
+      spec_review: codex
       test_case_generate: codex
       spec_tc_review: codex
       component_generate: codex
@@ -140,6 +141,7 @@ test("loadConfig rejects legacy profile.claude config", () => {
       apply_fixes: claude
       judge_minor: claude
       spec_generate: claude
+      spec_review: claude
       test_case_generate: claude
       spec_tc_review: claude
       component_generate: claude
@@ -335,6 +337,7 @@ test("loadConfig rejects runtime mismatches and invalid path templates", () => {
       apply_fixes: codex
       judge_minor: codex
       spec_generate: codex
+      spec_review: codex
       test_case_generate: codex
       spec_tc_review: codex
       component_generate: codex
@@ -380,6 +383,7 @@ runners:
       apply_fixes: codex
       judge_minor: codex
       spec_generate: codex
+      spec_review: codex
       test_case_generate: codex
       spec_tc_review: codex
       component_generate: codex
@@ -434,6 +438,7 @@ test("loadConfig infers defaults, profile resolution, and missing profile guidan
       apply_fixes: claude
       judge_minor: claude
       spec_generate: claude
+      spec_review: claude
       test_case_generate: claude
       spec_tc_review: claude
       component_generate: claude
@@ -489,6 +494,7 @@ test("inferProfile requires an explicit frontmatter profile when multiple profil
       apply_fixes: codex
       judge_minor: codex
       spec_generate: codex
+      spec_review: codex
       test_case_generate: codex
       spec_tc_review: codex
       component_generate: codex
@@ -521,6 +527,7 @@ test("inferProfile requires an explicit frontmatter profile when multiple profil
       apply_fixes: codex
       judge_minor: codex
       spec_generate: codex
+      spec_review: codex
       test_case_generate: codex
       spec_tc_review: codex
       component_generate: codex
