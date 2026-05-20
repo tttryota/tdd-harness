@@ -230,6 +230,64 @@ test("reviewStep defers minor fixes while major issues remain", async () => {
   assert.deepEqual(fixBatches[0]?.map((issue) => issue.description), ["must fix"]);
 });
 
+test("reviewStep accepts manual-only minor issues without applyFixes", async () => {
+  const { orchestrator, specPath } = createOrchestrator();
+  const anyOrchestrator = orchestrator as any;
+  let fixCalls = 0;
+  anyOrchestrator.applyFixes = async () => { fixCalls++; };
+
+  const result = await anyOrchestrator.reviewStep(
+    async () => ({
+      reviewer: "self_criteria",
+      checklist: [],
+      issues: [minor("[manual] file-wide constant extraction")],
+      isLgtm: false,
+    }),
+    {
+      targetFiles: ["target.ts"],
+      scopeAllowedTools: [],
+      specPath,
+      getFileDiff: async () => "",
+      runTests: async () => {},
+      reviewMode: "implementation",
+    },
+  );
+
+  assert.equal(result.isLgtm, false);
+  assert.equal(fixCalls, 0);
+  assert.equal(orchestrator.getRecords().at(-1)?.decision, "accepted");
+});
+
+test("reviewStep escalates manual blocking issues", async () => {
+  const { orchestrator, specPath } = createOrchestrator();
+  const anyOrchestrator = orchestrator as any;
+  let fixCalls = 0;
+  anyOrchestrator.applyFixes = async () => { fixCalls++; };
+
+  await assert.rejects(
+    () => anyOrchestrator.reviewStep(
+      async () => ({
+        reviewer: "self_criteria",
+        checklist: [],
+        issues: [major("[manual] changing validation order is required")],
+        isLgtm: false,
+      }),
+      {
+        targetFiles: ["target.ts"],
+        scopeAllowedTools: [],
+        specPath,
+        getFileDiff: async () => "",
+        runTests: async () => {},
+        reviewMode: "implementation",
+      },
+    ),
+    DriftError,
+  );
+
+  assert.equal(fixCalls, 0);
+  assert.equal(orchestrator.getRecords().at(-1)?.decision, "escalated");
+});
+
 test("applyFixes reuses lint_fix during post-fix lint retries", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-review-lint-fix-"));
   const specPath = join(root, "spec.md");

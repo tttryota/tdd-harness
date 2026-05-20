@@ -43,6 +43,14 @@ test("loadTemplate falls back to bundled templates and throws for missing names"
   assert.match(reviewTestQualityTemplate, /件数の exact match を要求しない/);
   assert.match(reviewTestQualityTemplate, /完全一致を要求しない/);
   assert.match(reviewTestQualityTemplate, /書かれていない検証を追加要求しない/);
+  assert.match(reviewTestQualityTemplate, /1 issue = 1 欠陥/);
+  assert.match(reviewTestQualityTemplate, /\[coverage\]/);
+  assert.match(reviewTestQualityTemplate, /\[async\]/);
+  assert.match(reviewTestQualityTemplate, /\[quality\]/);
+  assert.match(reviewTestQualityTemplate, /coverage と quality を同じ issue に混ぜない/);
+  assert.match(reviewTestQualityTemplate, /sleep/);
+  assert.match(reviewTestQualityTemplate, /wait\(timeout=\.\.\.\)/);
+  assert.match(reviewTestQualityTemplate, /interval_seconds/);
   const testGenerateTemplate = loadTemplate("test-generate", root);
   assert.match(testGenerateTemplate, /except Exception/);
   assert.match(testGenerateTemplate, /broad exception 捕捉は使わない/);
