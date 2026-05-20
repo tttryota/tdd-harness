@@ -57,6 +57,10 @@ test("loadTemplate falls back to bundled templates and throws for missing names"
   assert.match(testGenerateTemplate, /静的 import/);
   assert.match(testGenerateTemplate, /importlib/);
   assert.match(testGenerateTemplate, /公開 API/);
+  assert.match(testGenerateTemplate, /\*args, \*\*kwargs/);
+  assert.match(testGenerateTemplate, /fail-fast/);
+  assert.match(testGenerateTemplate, /contract_revision_required/);
+  assert.match(testGenerateTemplate, /推測 helper/);
   const implGenerateTemplate = loadTemplate("impl-generate", root);
   assert.match(implGenerateTemplate, /スコープ外ファイルは読み取り専用/);
   assert.match(implGenerateTemplate, /実装コードと、それに対応するテストコードだけ/);

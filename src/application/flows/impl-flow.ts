@@ -29,7 +29,7 @@ const TEST_GENERATION_OUTPUT_SCHEMA = {
   additionalProperties: false,
   required: ["decision", "why", "covered_test_cases", "updated_test_cases", "notes"],
   properties: {
-    decision: { enum: ["noop", "updated"] },
+    decision: { enum: ["noop", "updated", "contract_revision_required"] },
     why: {
       type: "array",
       items: { type: "string" },
@@ -74,7 +74,7 @@ const IMPL_GENERATION_OUTPUT_SCHEMA = {
 } as const;
 
 type TestGenerationResult = {
-  decision: "noop" | "updated";
+  decision: "noop" | "updated" | "contract_revision_required";
   why: string[];
   coveredTestCases: string[];
   updatedTestCases: string[];
@@ -110,7 +110,7 @@ export function parseTestGenerationResult(raw: string): TestGenerationResult {
 
   const record = parsed as Record<string, unknown>;
   const decision = record.decision;
-  if (decision !== "noop" && decision !== "updated") {
+  if (decision !== "noop" && decision !== "updated" && decision !== "contract_revision_required") {
     throw new HarnessError("テスト生成結果の decision が不正です。");
   }
 
@@ -229,6 +229,12 @@ export class ImplFlow {
 
     logger.log(EVENT.GUARD_CHECK, { scope: plan.scope, result: "pass" });
 
+    if (resumeFrom && testGenerationDecision === "contract_revision_required") {
+      throw new GuardError(
+        "前回の test-generate は contract_revision_required で停止しています。依存契約またはテストコード側の契約定義を見直し、通常実行で再開してください。",
+      );
+    }
+
     const LINES_PER_TEST_CASE = 30;
     const expectedLines = plan.targetTestCases.length * LINES_PER_TEST_CASE;
     driftGuard.startTask(plan.scope, expectedLines);
@@ -280,6 +286,23 @@ export class ImplFlow {
       const parsedTestGenerationResult = parseTestGenerationResult(testGenResult.text);
       sessionId = testGenResult.sessionId ?? "";
       testGenerationDecision = parsedTestGenerationResult.decision;
+
+      if (testGenerationDecision === "contract_revision_required") {
+        logger.saveCheckpoint({
+          planPath, completedStep: "test_generated", sessionId,
+          testGenerationDecision,
+          records: [], greenAttempt: 0, timestamp: new Date().toISOString(),
+        });
+        const reasonText = parsedTestGenerationResult.why.length > 0
+          ? parsedTestGenerationResult.why.join(" / ")
+          : "理由なし";
+        const notesText = parsedTestGenerationResult.notes.length > 0
+          ? `\n未確定の契約:\n- ${parsedTestGenerationResult.notes.join("\n- ")}`
+          : "";
+        throw new GuardError(
+          `テストコード側の契約定義見直しが必要です。理由: ${reasonText}${notesText}`,
+        );
+      }
 
       await this.reconcileGeneratedTestsPlacement(plan.scope, testPath, testGenerationDecision);
 
@@ -568,7 +591,7 @@ ${issueList}
   private async reconcileGeneratedTestsPlacement(
     scope: string,
     testPath: string,
-    decision: "noop" | "updated",
+    decision: "noop" | "updated" | "contract_revision_required",
   ): Promise<void> {
     let expectedTests = await this.boundary.findTestFiles(scope);
     const misplacedTests = await this.boundary.findMisplacedTestFiles(scope);
@@ -637,7 +660,7 @@ ${issueList}
     logger: Logger;
     planPath: string;
     sessionId: string;
-    testGenerationDecision: "noop" | "updated";
+    testGenerationDecision: "noop" | "updated" | "contract_revision_required";
     greenAttempt: number;
     resumeFrom: CompletedStep | null;
     alreadyGreen: boolean;
@@ -725,7 +748,7 @@ ${issueList}
       planPath: string;
       completedStep: CompletedStep;
       sessionId: string;
-      testGenerationDecision: "noop" | "updated";
+      testGenerationDecision: "noop" | "updated" | "contract_revision_required";
       greenAttempt: number;
       records: ReviewRecord[];
     },

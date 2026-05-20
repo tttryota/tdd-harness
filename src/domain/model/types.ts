@@ -185,7 +185,7 @@ export type CheckpointData = {
   planPath: string;
   completedStep: CompletedStep;
   sessionId: string;
-  testGenerationDecision?: "noop" | "updated";
+  testGenerationDecision?: "noop" | "updated" | "contract_revision_required";
   records: ReviewRecord[];
   greenAttempt: number;
   timestamp: string;

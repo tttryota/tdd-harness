@@ -38,6 +38,19 @@ test("parseTestGenerationResult accepts updated result", () => {
   assert.deepEqual(result.updatedTestCases, ["case 3"]);
 });
 
+test("parseTestGenerationResult accepts contract revision result", () => {
+  const result = parseTestGenerationResult(JSON.stringify({
+    decision: "contract_revision_required",
+    why: ["dependency protocol signature is underdetermined"],
+    covered_test_cases: ["case 1"],
+    updated_test_cases: [],
+    notes: ["DiffDetector.detect(target_path, snapshot_store) signature is not defined"],
+  }));
+
+  assert.equal(result.decision, "contract_revision_required");
+  assert.deepEqual(result.notes, ["DiffDetector.detect(target_path, snapshot_store) signature is not defined"]);
+});
+
 test("parseImplGenerationResult accepts noop result", () => {
   const result = parseImplGenerationResult(JSON.stringify({
     decision: "noop",
@@ -308,4 +321,118 @@ test("ImplFlow resume skips completed implementation review phases", async () =>
 
   assert.deepEqual(reviewCalls, ["quality", "external", "design"]);
   assert.deepEqual(savedSteps, ["impl_review_quality_passed", "impl_reviewed"]);
+});
+
+test("ImplFlow stops when test generation requires contract revision", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-impl-contract-revision-"));
+  mkdirSync(join(root, "docs", "spec"), { recursive: true });
+  mkdirSync(join(root, "tests", "test-cases"), { recursive: true });
+  writeFileSync(join(root, "docs", "spec", "feature.md"), "---\nstatus: approved\n---\n# spec\n", "utf-8");
+  writeFileSync(join(root, "tests", "test-cases", "feature.md"), "---\nstatus: approved\n---\n# cases\n", "utf-8");
+
+  const checkpoints: Array<{ completedStep: string; testGenerationDecision?: string }> = [];
+  const logger = {
+    log() {},
+    logCommand() {},
+    logTranscript() {},
+    saveReviewData() {},
+    saveCheckpoint(data: { completedStep: string; testGenerationDecision?: string }) { checkpoints.push(data); },
+    loadCheckpoint() { return null; },
+    clearCheckpoint() {},
+    summarizeRunnerUsage() {
+      return { total: { runs: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }, byStep: {} };
+    },
+  };
+  const runtimeFactory = {
+    createImplRuntime() {
+      return {
+        logger,
+        lintGuard: { check: async () => {} },
+        reviewOrchestrator: { getRecords() { return []; }, restoreRecords() {} },
+        driftGuard: { startTask() {}, checkTimeout() {}, checkDiffScope() {}, recordTestAttempt() { return null; } },
+      };
+    },
+  } as any;
+  const boundary = {
+    getProjectRoot: () => root,
+    implementationGuard() {},
+    validateScope() {},
+    readFrontmatter() { return {}; },
+    testPathForScope: () => "tests",
+    scopeAllowedTools: () => ["Read"],
+    testAllowedTools: () => ["Read"],
+    implAllowedTools: () => ["Read"],
+    findChangedImplementationFiles: async () => [],
+    findChangedTestFiles: async () => [],
+    findSourceFiles: async () => [],
+    findImplementationFiles: async () => [],
+    findTestFiles: async () => [],
+    findMisplacedTestFiles: async () => [],
+    stageFiles: async () => {},
+    verifyChangedFilesWithinScope: async () => {},
+    getCurrentCommitHash: async () => "",
+    countDiffLines: async () => 0,
+    countDiffLinesForFiles: async () => 0,
+    getFileDiff: async () => "",
+    extractCategory() { return "core"; },
+    extractName() { return "feature"; },
+    assertWithinProject() {},
+  } as any;
+  const registry = {
+    getConfig() { return { runners: {}, templates: {} }; },
+    getStepMapping() { return {}; },
+    isStepSkipped() { return false; },
+    getRunner() {
+      return {
+        async run() {
+          return {
+            text: JSON.stringify({
+              decision: "contract_revision_required",
+              why: ["signature is underdetermined"],
+              covered_test_cases: ["case"],
+              updated_test_cases: [],
+              notes: ["Tagger.tag(batch_input) contract is missing"],
+            }),
+            sessionId: "sess-1",
+          };
+        },
+      };
+    },
+  } as any;
+  const flow = new ImplFlow(boundary, registry, {
+    toolRoot: root,
+    exec: [],
+    reviewCriteria: [],
+    criteriaPreset: "backend",
+  } as any, {
+    frameworkName: "fake",
+    buildArgs() { return []; },
+    parseResult() { return { kind: "passed", output: "" }; },
+    name: "fake",
+  } as any, [], runtimeFactory, new LauncherToolExecutor());
+
+  await assert.rejects(
+    () => (flow as any).run("plan.md", {
+      plan: {
+        type: "impl",
+        profile: "backend",
+        scope: "feature",
+        specPath: "docs/spec/feature.md",
+        testCasesPath: "tests/test-cases/feature.md",
+        description: "impl",
+        targets: [],
+        dependencies: [],
+        browserScenarios: [],
+        targetTestCases: ["case"],
+        exclusions: [],
+        completionCriteria: [],
+        designDecisions: [],
+      },
+    }),
+    /契約定義見直しが必要/,
+  );
+
+  assert.equal(checkpoints.length, 1);
+  assert.equal(checkpoints[0]?.completedStep, "test_generated");
+  assert.equal(checkpoints[0]?.testGenerationDecision, "contract_revision_required");
 });
