@@ -406,3 +406,90 @@ test("applyFixes reuses lint_fix during post-fix lint retries", async () => {
   assert.equal(runnerCalls.some((call) => /BLE001: blind except/.test(call.prompt)), true);
   assert.deepEqual(runnerCalls.at(-1)?.allowedTools, ["Write(src/*)"]);
 });
+
+test("applyFixes retries implementation fixes when post-fix tests fail", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-review-test-retry-"));
+  const specPath = join(root, "spec.md");
+  writeFileSync(specPath, "# spec\n", "utf-8");
+  const logger = new HarnessLogger("review-test-retry", { baseDir: root });
+  const runnerCalls: Array<{ prompt: string; allowedTools?: string[] }> = [];
+  const registry = {
+    getConfig() {
+      return { templates: {} };
+    },
+    getRunner() {
+      return {
+        async run(request: { prompt: string; allowedTools?: string[] }) {
+          runnerCalls.push({ prompt: request.prompt, allowedTools: request.allowedTools });
+          return { text: "{\"checklist\":[{\"item\":\"ok\",\"verdict\":\"pass\",\"evidence\":\"done\"}],\"issues\":[]}" };
+        },
+      };
+    },
+    isStepSkipped() {
+      return false;
+    },
+    getFallbackRunner() {
+      return this.getRunner();
+    },
+  } as any;
+
+  let lintCheckCalls = 0;
+  let rescanCalls = 0;
+  let runTestsCalls = 0;
+  const lintGuard = {
+    async check(_files: string[], options?: { claudeFix?: (violations: LintViolation[]) => Promise<void>; rescanFiles?: () => Promise<string[]> }) {
+      lintCheckCalls++;
+      await options?.rescanFiles?.();
+    },
+  } as any;
+
+  const orchestrator = new ReviewOrchestrator(logger, lintGuard, root, registry);
+  const anyOrchestrator = orchestrator as any;
+  let executeRunCalls = 0;
+  anyOrchestrator.executeRun = async (_step: string, prompt: string) => {
+    executeRunCalls++;
+    runnerCalls.push({ prompt });
+    if (executeRunCalls === 1 || executeRunCalls === 3) {
+      return JSON.stringify({
+        summary: "fix the reported issue",
+        repairs: [{
+          goal: "fix review issue",
+          files: ["src/file.py"],
+          instructions: ["update the reported code path"],
+          constraints: ["do not change unrelated logic"],
+          related_issues: [1],
+        }],
+        global_constraints: ["keep changes in scope"],
+      });
+    }
+    return "";
+  };
+
+  await anyOrchestrator.applyFixes(
+    [{ file: "src/file.py", line: 10, severity: "major", description: "fix review issue" }],
+    {
+      targetFiles: ["src/file.py"],
+      scopeAllowedTools: ["Write(src/*)"],
+      specPath,
+      reviewMode: "implementation",
+      rescanFiles: async () => {
+        rescanCalls++;
+        return ["src/file.py"];
+      },
+      runTests: async () => {
+        runTestsCalls++;
+        if (runTestsCalls === 1) {
+          throw new HarnessError("テスト失敗: assert recorded_triggers == ['startup']");
+        }
+      },
+    },
+  );
+
+  assert.equal(runTestsCalls, 2);
+  assert.equal(lintCheckCalls, 2);
+  assert.equal(rescanCalls, 4);
+  assert.equal(executeRunCalls, 4);
+  assert.equal(runnerCalls.some((call) => /apply_fixes の再試行 2\/3/.test(call.prompt)), true);
+  assert.equal(runnerCalls.some((call) => /直前のテスト失敗/.test(call.prompt)), true);
+  assert.equal(runnerCalls.some((call) => /テストコードや期待結果は変更しない/.test(call.prompt)), true);
+});

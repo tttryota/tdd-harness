@@ -109,6 +109,13 @@ type FixPlan = {
   globalConstraints: string[];
 };
 
+type FixRetryContext = {
+  attempt: number;
+  maxAttempts: number;
+  previousPlan: FixPlan | null;
+  lastTestFailureOutput: string | null;
+};
+
 type ReviewParams = {
   targetFiles: string[];
   specPath: string;
@@ -908,28 +915,39 @@ export class ReviewOrchestrator {
     issues: ReviewIssue[],
     params: ReviewParams,
   ): Promise<void> {
-    const plan = await this.planFixes(issues, params);
-    await this.executeFixPlan(plan, issues, params);
+    let previousPlan: FixPlan | null = null;
+    let lastTestFailureOutput: string | null = null;
 
-    // 修正でファイルが追加された可能性があるので再スキャン
-    if (params.rescanFiles) {
-      params.targetFiles = await params.rescanFiles();
-    }
+    for (let attempt = 1; attempt <= RETRY_POLICY.applyFixes.maxAttempts; attempt++) {
+      const retryContext: FixRetryContext = {
+        attempt,
+        maxAttempts: RETRY_POLICY.applyFixes.maxAttempts,
+        previousPlan,
+        lastTestFailureOutput,
+      };
+      const plan = await this.planFixes(issues, params, retryContext);
+      await this.executeFixPlan(plan, issues, params, retryContext);
+      previousPlan = plan;
 
-    // 対象ファイルが空ならリントをスキップ（全体に広がるのを防止）
-    if (params.targetFiles.length > 0) {
-      await this.lintGuard.check(params.targetFiles, {
-        claudeFix: async (violations: LintViolation[]) => {
-          const lintIssueList = violations
-            .map((violation, idx) =>
-              `${idx + 1}. ${violation.tool}: ${violation.file}:${violation.line} - ${violation.message}`,
-            )
-            .join("\n");
-          const runner = this.registry.getRunner(FLOW_STEP.LINT_FIX);
-          await runner.run(
-            applyStepContext(
-              {
-                prompt: `以下のリンター違反を修正してください。自動修正できなかった違反です。
+      // 修正でファイルが追加された可能性があるので再スキャン
+      if (params.rescanFiles) {
+        params.targetFiles = await params.rescanFiles();
+      }
+
+      // 対象ファイルが空ならリントをスキップ（全体に広がるのを防止）
+      if (params.targetFiles.length > 0) {
+        await this.lintGuard.check(params.targetFiles, {
+          claudeFix: async (violations: LintViolation[]) => {
+            const lintIssueList = violations
+              .map((violation, idx) =>
+                `${idx + 1}. ${violation.tool}: ${violation.file}:${violation.line} - ${violation.message}`,
+              )
+              .join("\n");
+            const runner = this.registry.getRunner(FLOW_STEP.LINT_FIX);
+            await runner.run(
+              applyStepContext(
+                {
+                  prompt: `以下のリンター違反を修正してください。自動修正できなかった違反です。
 
 ## 違反一覧
 ${lintIssueList}
@@ -937,29 +955,41 @@ ${lintIssueList}
 ## 制約
 - 指摘された違反のみ修正する
 - 既存のロジックや振る舞いを不必要に変更しない`,
-                allowedTools: params.scopeAllowedTools,
-                cwd: this.projectRoot,
-                timeoutMs: DEFAULT_TIMEOUT_MS,
-              },
-              this.profile,
-              FLOW_STEP.LINT_FIX,
-              this.projectRoot,
-            ),
-            this.logger,
-          );
-        },
-        rescanFiles: params.rescanFiles,
-      });
-    }
-    // テストレビュー時は実装が未生成のためテスト実行をスキップ
-    if (params.reviewMode !== "test" && params.runTests) {
-      await params.runTests();
+                  allowedTools: params.scopeAllowedTools,
+                  cwd: this.projectRoot,
+                  timeoutMs: DEFAULT_TIMEOUT_MS,
+                },
+                this.profile,
+                FLOW_STEP.LINT_FIX,
+                this.projectRoot,
+              ),
+              this.logger,
+            );
+          },
+          rescanFiles: params.rescanFiles,
+        });
+      }
+      // テストレビュー時は実装が未生成のためテスト実行をスキップ
+      if (params.reviewMode !== "test" && params.runTests) {
+        try {
+          await params.runTests();
+        } catch (error: unknown) {
+          const testFailureOutput = this.extractTestFailureOutput(error);
+          if (!testFailureOutput || attempt >= RETRY_POLICY.applyFixes.maxAttempts) {
+            throw error;
+          }
+          lastTestFailureOutput = testFailureOutput;
+          continue;
+        }
+      }
+      return;
     }
   }
 
   private async planFixes(
     issues: ReviewIssue[],
     params: ReviewParams,
+    retryContext: FixRetryContext,
   ): Promise<FixPlan> {
     const issueList = issues
       .map(
@@ -967,17 +997,32 @@ ${lintIssueList}
           `${idx + 1}. [${i.severity}] ${i.file}:${i.line ?? "?"} - ${i.description}`,
       )
       .join("\n");
+    const retrySummary = retryContext.attempt > 1
+      ? `## リトライ状況
+- これは apply_fixes の再試行 ${retryContext.attempt}/${retryContext.maxAttempts}
+- 直前の apply_fixes 後にテストが失敗したため、実装コードの再修正が必要
+- テストコードや期待結果は変更しない
+
+## 直前のテスト失敗
+${retryContext.lastTestFailureOutput ?? "なし"}
+
+## 直前の修正計画
+${retryContext.previousPlan ? this.renderFixPlan(retryContext.previousPlan) : "なし"}
+
+`
+      : "";
     const prompt = `以下のレビュー指摘に対して、一括修正のための計画を作成してください。
 
 ## 指摘一覧
 ${issueList}
 
-## 前提
+${retrySummary}## 前提
 - すべての指摘を対象にした計画を返す。指摘を落とさない
 - 同じ原因・同じパターンの指摘は 1 repair にまとめてよい
 - issue 間の依存関係と修正順序を明示する
 - review issue を再分類して除外しない
 - \`[manual]\` が付いた指摘も停止理由にせず、必要な制約を plan に書く
+- テスト失敗を受けた再試行では、実装コードだけを修正してテストを再度通す方針を立てる
 - 修正後の検証は既存の lint / test / 次サイクル review が担当する
 
 ## 出力要件
@@ -1001,6 +1046,7 @@ ${issueList}
     plan: FixPlan,
     issues: ReviewIssue[],
     params: ReviewParams,
+    retryContext: FixRetryContext,
   ): Promise<void> {
     const issueList = issues
       .map((i, idx) => `${idx + 1}. [${i.severity}] ${i.file}:${i.line ?? "?"} - ${i.description}`)
@@ -1020,6 +1066,16 @@ ${constraints || "  - なし"}`;
       })
       .join("\n\n");
     const globalConstraints = plan.globalConstraints.map((constraint) => `- ${constraint}`).join("\n");
+    const retrySummary = retryContext.attempt > 1
+      ? `## Retry Context
+- これは apply_fixes の再試行 ${retryContext.attempt}/${retryContext.maxAttempts}
+- 直前の apply_fixes 後に次のテスト失敗が発生した
+${retryContext.lastTestFailureOutput ?? "なし"}
+- 失敗原因を実装側で吸収し、既存テストを再び通す
+- テストコードや期待結果は変更しない
+
+`
+      : "";
     const prompt = `以下の修正計画に従ってコードを修正してください。
 
 ## 修正計画 summary
@@ -1034,17 +1090,40 @@ ${repairsText}
 ## Global Constraints
 ${globalConstraints || "- なし"}
 
-## 実行ルール
+${retrySummary}## 実行ルール
 - 修正根拠は上の修正計画だけに限定する
 - plan に書かれていない cleanup や追加修正をしない
 - review issue を自分で再分類しない
 - 新しい設計変更や追加の \`[manual]\` 判断を発明しない
+- テストコード、テストケース文書、期待結果は変更しない
 - 既存の scope / allowedTools 制約を守る`;
 
     await this.executeRun(FLOW_STEP.APPLY_FIXES, prompt, {
       allowedTools: params.scopeAllowedTools,
       cwd: this.projectRoot,
     });
+  }
+
+  private renderFixPlan(plan: FixPlan): string {
+    const repairs = plan.repairs
+      .map((repair, index) =>
+        `${index + 1}. goal=${repair.goal}; files=${repair.files.join(", ")}; related_issues=${repair.relatedIssueIndexes.join(", ")}`,
+      )
+      .join("\n");
+    const globalConstraints = plan.globalConstraints.length > 0
+      ? plan.globalConstraints.map((constraint) => `- ${constraint}`).join("\n")
+      : "- なし";
+    return `summary: ${plan.summary}
+repairs:
+${repairs || "なし"}
+global_constraints:
+${globalConstraints}`;
+  }
+
+  private extractTestFailureOutput(error: unknown): string | null {
+    if (!(error instanceof HarnessError)) return null;
+    if (!error.message.startsWith("テスト失敗:")) return null;
+    return error.message.replace(/^テスト失敗:\s*/, "").trim();
   }
 
   private parseFixPlan(raw: string, expectedIssueCount: number): FixPlan {

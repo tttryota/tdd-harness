@@ -2,6 +2,7 @@ export const RETRY_POLICY = {
   pageBrowser: { maxAttempts: 2 },
   componentFix: { maxAttempts: 2 },
   implGreen: { maxAttempts: 3 },
+  applyFixes: { maxAttempts: 3 },
   review: {
     maxCycles: 5,
     minorOnlyAcceptanceThreshold: 2,
