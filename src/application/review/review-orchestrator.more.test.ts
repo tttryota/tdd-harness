@@ -121,7 +121,6 @@ test("runPageReview accepts clean pages, escalates parse failures, and can accep
     return { reviewer: "code", checklist: [], issues: [], isLgtm: true };
   };
   minorAny.applyFixes = async () => { pageFixes++; };
-  minorAny.generateJudgmentSummary = async () => "fixed";
   minorAny.judgeMinorAcceptance = async () => {
     judgeCalls++;
     return { safe: true, reason: "acceptable" };
@@ -159,7 +158,6 @@ test("reviewStep fixes major issues and can retry unsafe minor issues", async ()
 
   let majorCalls = 0;
   anyOrchestrator.applyFixes = async () => { majorCalls++; };
-  anyOrchestrator.generateJudgmentSummary = async () => "summary";
   const fixed = await anyOrchestrator.reviewStep(
     async () => {
       majorCalls++;
@@ -201,8 +199,6 @@ test("reviewStep passes major and minor issues together into applyFixes", async 
   const fixBatches: ReviewIssue[][] = [];
   let calls = 0;
   anyOrchestrator.applyFixes = async (issues: ReviewIssue[]) => { fixBatches.push(issues); };
-  anyOrchestrator.generateJudgmentSummary = async () => "summary";
-
   const result = await anyOrchestrator.reviewStep(
     async () => {
       calls++;
@@ -311,8 +307,6 @@ test("reviewStep logs review_result summaries with findings detail", async () =>
   const anyOrchestrator = orchestrator as any;
   let calls = 0;
   anyOrchestrator.applyFixes = async () => {};
-  anyOrchestrator.generateJudgmentSummary = async () => "summary";
-
   const result = await anyOrchestrator.reviewStep(
     async () => {
       calls++;

@@ -8,7 +8,6 @@ export const FLOW_STEP = {
   IMPL_EXTERNAL_REVIEW: "impl_external_review",
   LINT_FIX: "lint_fix",
   APPLY_FIXES: "apply_fixes",
-  JUDGMENT_SUMMARY: "judgment_summary",
   JUDGE_MINOR: "judge_minor",
   SPEC_GENERATE: "spec_generate",
   TEST_CASE_GENERATE: "test_case_generate",

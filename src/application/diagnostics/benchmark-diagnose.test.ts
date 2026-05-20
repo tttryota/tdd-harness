@@ -40,8 +40,8 @@ test("renderBenchmarkDiagnose summarizes a single log with optimization opportun
   writeFileSync(join(logDir, "review-data.json"), JSON.stringify({
     plan: { profile: "backend", scope: "benchmark/markdown-toc" },
     records: [
-      { step: "self_quality", cycle: 1, reviewer: "self_quality", findings: [], decision: "lgtm", diffBefore: "", diffAfter: "", judgmentSummary: "none" },
-      { step: "impl_external", cycle: 1, reviewer: "impl_external", findings: [{ severity: "major", file: "x.py", description: "bug" }], decision: "fixed", diffBefore: "", diffAfter: "", judgmentSummary: "fix" },
+      { step: "self_quality", cycle: 1, reviewer: "self_quality", findings: [], decision: "lgtm", diffBefore: "", diffAfter: "" },
+      { step: "impl_external", cycle: 1, reviewer: "impl_external", findings: [{ severity: "major", file: "x.py", description: "bug" }], decision: "fixed", diffBefore: "", diffAfter: "" },
     ],
     tdd: { greenAttempts: 1, alreadyGreen: false },
   }), "utf-8");

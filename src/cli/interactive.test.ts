@@ -14,7 +14,6 @@ function stepMapping() {
     [FLOW_STEP.IMPL_EXTERNAL_REVIEW]: "claude",
     [FLOW_STEP.LINT_FIX]: "codex",
     [FLOW_STEP.APPLY_FIXES]: "codex",
-    [FLOW_STEP.JUDGMENT_SUMMARY]: "codex",
     [FLOW_STEP.JUDGE_MINOR]: "codex",
     [FLOW_STEP.SPEC_GENERATE]: "codex",
     [FLOW_STEP.TEST_CASE_GENERATE]: "codex",

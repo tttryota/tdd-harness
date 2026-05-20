@@ -106,9 +106,6 @@ test("ImplFlow runs through RED to GREEN and generates a report", async () => {
               sessionId: "session-1",
             };
           }
-          if (step === FLOW_STEP.JUDGMENT_SUMMARY) {
-            return { text: "summary" };
-          }
           return {
             text: "{\"checklist\":[{\"item\":\"ok\",\"verdict\":\"pass\",\"evidence\":\"done\"}],\"issues\":[]}",
             sessionId: "session-1",
@@ -217,9 +214,6 @@ test("ImplFlow diff_scope ignores large test diffs when implementation diff is s
               }),
               sessionId: "session-1",
             };
-          }
-          if (step === FLOW_STEP.JUDGMENT_SUMMARY) {
-            return { text: "summary" };
           }
           return {
             text: "{\"checklist\":[{\"item\":\"ok\",\"verdict\":\"pass\",\"evidence\":\"done\"}],\"issues\":[]}",

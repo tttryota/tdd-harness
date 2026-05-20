@@ -18,7 +18,6 @@ function baseProfile() {
       [FLOW_STEP.IMPL_EXTERNAL_REVIEW]: "codex",
       [FLOW_STEP.LINT_FIX]: "generic",
       [FLOW_STEP.APPLY_FIXES]: "generic",
-      [FLOW_STEP.JUDGMENT_SUMMARY]: "claude",
       [FLOW_STEP.JUDGE_MINOR]: "claude",
       [FLOW_STEP.SPEC_GENERATE]: "claude",
       [FLOW_STEP.TEST_CASE_GENERATE]: "claude",

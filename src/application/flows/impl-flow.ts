@@ -742,7 +742,6 @@ ${issueList}
     if (!this.shouldSkip(options.resumeFrom, "impl_reviewed")) {
       console.log("実装レビュー実行中... (external)");
       await reviewOrchestrator.runImplementationExternalReview(reviewParams);
-      reviewOrchestrator.appendDesignDecisionRecords(plan.designDecisions);
       this.saveImplCheckpoint(logger, {
         planPath: options.planPath,
         completedStep: "impl_reviewed",
@@ -891,8 +890,6 @@ ${plan.targetTestCases.map((tc, i) => `${i + 1}. ${tc}`).join("\n")}
           for (const issue of record.findings) {
             md += `- [${issue.severity}] ${issue.file}${issue.line ? `:${issue.line}` : ""} — ${redact(issue.description)}\n`;
           }
-          // 判断理由（サイクルあたり1回）
-          md += `\n**判断**: ${redact(record.judgmentSummary)}\n`;
           // diff（サイクルあたり1回）
           if (record.diffAfter) {
             const snippet = redact(record.diffAfter.split("\n").slice(0, 30).join("\n"));
@@ -902,23 +899,21 @@ ${plan.targetTestCases.map((tc, i) => `${i + 1}. ${tc}`).join("\n")}
           }
           md += `\n`;
         } else if (record.decision === "escalated") {
-          md += `**エスカレーション**: ${record.judgmentSummary}\n\n`;
+          md += `**エスカレーション**: 自動修正で解決できませんでした。\n\n`;
         }
       }
     }
 
-    // 設計判断セクション（事前定義 vs レビュー中の許容を分離）
-    const designDecisionRecords = acceptedRecords.filter((r) => r.step === "design_decision");
-    const reviewAcceptedRecords = acceptedRecords.filter((r) => r.step !== "design_decision");
-
-    if (designDecisionRecords.length > 0) {
+    // 設計判断セクション
+    if (plan.designDecisions.length > 0) {
       md += `---\n\n## 事前定義の設計判断\n\n`;
-      for (const record of designDecisionRecords) {
-        md += `- ${redact(record.judgmentSummary)}\n`;
+      for (const decision of plan.designDecisions) {
+        md += `- ${redact(decision)}\n`;
       }
       md += `\n`;
     }
 
+    const reviewAcceptedRecords = acceptedRecords;
     if (reviewAcceptedRecords.length > 0) {
       md += `---\n\n## レビュー中に許容した指摘\n\n`;
       for (const record of reviewAcceptedRecords) {
@@ -926,7 +921,7 @@ ${plan.targetTestCases.map((tc, i) => `${i + 1}. ${tc}`).join("\n")}
           md += `#### ${redact(issue.description)}（${issue.severity}）\n`;
           md += `- **ファイル**: ${issue.file}${issue.line ? `:${issue.line}` : ""}\n`;
           md += `- **判断**: 許容\n`;
-          md += `- **理由**: ${redact(record.judgmentSummary)}\n\n`;
+          md += `\n`;
         }
       }
     }
@@ -938,7 +933,7 @@ ${plan.targetTestCases.map((tc, i) => `${i + 1}. ${tc}`).join("\n")}
     md += `| レビューサイクル総数 | ${totalCycles}回（修正による再実行を含む） |\n`;
     md += `| 修正した指摘数 | ${fixCount}件 |\n`;
     md += `| 通過ステップ数 | ${lgtmRecords.length}件 |\n`;
-    md += `| 事前定義の設計判断 | ${designDecisionRecords.length}件 |\n`;
+    md += `| 事前定義の設計判断 | ${plan.designDecisions.length}件 |\n`;
     md += `| レビュー中に許容 | ${reviewAcceptedRecords.length}件 |\n`;
     md += `| Claude実行回数 | ${usageSummary.total.runs}件 |\n`;
     md += `| Input Tokens | ${usageSummary.total.inputTokens} |\n`;

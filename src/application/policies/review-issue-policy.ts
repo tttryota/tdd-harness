@@ -8,7 +8,6 @@ export type ScopedFiles = {
 export type AcceptedReviewIssue = {
   issue: ReviewIssue;
   reviewer: string;
-  judgmentSummary: string;
 };
 
 export function toScopedFiles(files: string[]): ScopedFiles {
@@ -59,7 +58,6 @@ export function reconcileReviewIssues(
     accepted.push({
       issue: entry.issue,
       reviewer: entry.reviewer,
-      judgmentSummary: "片方のエージェントのみが指摘した minor 指摘のため対応不要と判断",
     });
   }
 

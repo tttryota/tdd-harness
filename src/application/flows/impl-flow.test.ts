@@ -247,7 +247,6 @@ test("ImplFlow resume skips completed implementation review phases", async () =>
     runImplementationCriteriaReview: async () => { reviewCalls.push("criteria"); return {}; },
     runImplementationQualityReview: async () => { reviewCalls.push("quality"); return {}; },
     runImplementationExternalReview: async () => { reviewCalls.push("external"); return {}; },
-    appendDesignDecisionRecords: () => { reviewCalls.push("design"); },
   };
   const runtimeFactory = {
     createImplRuntime() {
@@ -319,7 +318,7 @@ test("ImplFlow resume skips completed implementation review phases", async () =>
     },
   });
 
-  assert.deepEqual(reviewCalls, ["quality", "external", "design"]);
+  assert.deepEqual(reviewCalls, ["quality", "external"]);
   assert.deepEqual(savedSteps, ["impl_review_quality_passed", "impl_reviewed"]);
 });
 

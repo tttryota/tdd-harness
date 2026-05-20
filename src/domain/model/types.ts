@@ -156,7 +156,6 @@ export type ReviewRecord = {
   decision: "fixed" | "accepted" | "escalated" | "lgtm";
   diffBefore: string;
   diffAfter: string;
-  judgmentSummary: string;
 };
 
 export type ReviewDataStatus = "completed" | "failed";
