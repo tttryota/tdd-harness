@@ -62,8 +62,6 @@ const MINOR_ACCEPTANCE_SCHEMA = {
   },
 } as const;
 
-const MANUAL_FIX_PREFIX = "[manual]";
-
 const FIX_PLAN_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -822,43 +820,6 @@ export class ReviewOrchestrator {
         );
       }
 
-      const fixPlan = this.planIssuesForFixes(result.issues);
-      if (fixPlan.manualBlocking.length > 0) {
-        const judgmentSummary = "自動修正で壊しやすい major/critical 指摘を検出したため、人間確認へエスカレーション";
-        this.records.push({
-          step: result.reviewer,
-          cycle: cycle + 1,
-          reviewer: result.reviewer,
-          findings: result.issues,
-          decision: "escalated",
-          diffBefore,
-          diffAfter: "",
-          judgmentSummary,
-        });
-        throw new DriftError(
-          ESCALATION_LEVEL.LEVEL_2,
-          "manual_fix_required",
-          `${result.reviewer} に自動修正で壊しやすい major/critical 指摘が含まれています。人間の確認が必要です。`,
-        );
-      }
-
-      if (!hasCriticalOrMajorIssues(result.issues) && fixPlan.toFix.length === 0) {
-        const judgmentSummary = "minor 指摘は広い cleanup / 構造変更を要するため apply_fixes では扱わない";
-        for (const issue of result.issues) {
-          this.records.push({
-            step: result.reviewer,
-            cycle: cycle + 1,
-            reviewer: result.reviewer,
-            findings: [issue],
-            decision: "accepted",
-            diffBefore,
-            diffAfter: "",
-            judgmentSummary,
-          });
-        }
-        return result;
-      }
-
       minorOnlyCycles = nextMinorOnlyCycles(minorOnlyCycles, result.issues);
       if (!hasCriticalOrMajorIssues(result.issues)) {
         if (shouldJudgeMinorAcceptance(minorOnlyCycles)) {
@@ -882,7 +843,7 @@ export class ReviewOrchestrator {
             return result;
           }
           // unsafe → 修正を再試行（1回のみ）
-          await this.applyFixes(fixPlan.toFix, params);
+          await this.applyFixes(result.issues, params);
           const retryResult = await reviewFn();
           const diffAfterRetry = params.getFileDiff
             ? await params.getFileDiff(params.targetFiles)
@@ -915,7 +876,7 @@ export class ReviewOrchestrator {
         }
       }
 
-      await this.applyFixes(fixPlan.toFix, params);
+      await this.applyFixes(result.issues, params);
 
       const diffAfter = params.getFileDiff
         ? await params.getFileDiff(params.targetFiles)
@@ -1084,31 +1045,6 @@ ${globalConstraints || "- なし"}
       allowedTools: params.scopeAllowedTools,
       cwd: this.projectRoot,
     });
-  }
-
-  private planIssuesForFixes(issues: ReviewIssue[]): {
-    toFix: ReviewIssue[];
-    manualBlocking: ReviewIssue[];
-  } {
-    const blockingIssues = issues.filter((issue) => issue.severity === "critical" || issue.severity === "major");
-    const safeBlocking = blockingIssues.filter((issue) => !this.isManualFixIssue(issue));
-    if (safeBlocking.length > 0) {
-      return { toFix: safeBlocking, manualBlocking: [] };
-    }
-
-    const manualBlocking = blockingIssues.filter((issue) => this.isManualFixIssue(issue));
-    if (manualBlocking.length > 0) {
-      return { toFix: [], manualBlocking };
-    }
-
-    return {
-      toFix: issues.filter((issue) => !this.isManualFixIssue(issue)),
-      manualBlocking: [],
-    };
-  }
-
-  private isManualFixIssue(issue: ReviewIssue): boolean {
-    return issue.description.trimStart().startsWith(MANUAL_FIX_PREFIX);
   }
 
   private parseFixPlan(raw: string, expectedIssueCount: number): FixPlan {

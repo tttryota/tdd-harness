@@ -195,7 +195,7 @@ test("reviewStep fixes major issues and can retry unsafe minor issues", async ()
   assert.equal(result.isLgtm, true);
 });
 
-test("reviewStep defers minor fixes while major issues remain", async () => {
+test("reviewStep passes major and minor issues together into applyFixes", async () => {
   const { orchestrator, specPath } = createOrchestrator();
   const anyOrchestrator = orchestrator as any;
   const fixBatches: ReviewIssue[][] = [];
@@ -211,7 +211,7 @@ test("reviewStep defers minor fixes while major issues remain", async () => {
         : {
             reviewer: "self_criteria",
             checklist: [],
-            issues: [major("must fix"), minor("can wait")],
+            issues: [major("must fix"), minor("[manual] can wait")],
             isLgtm: false,
           };
     },
@@ -227,22 +227,32 @@ test("reviewStep defers minor fixes while major issues remain", async () => {
 
   assert.equal(result.isLgtm, true);
   assert.equal(fixBatches.length, 1);
-  assert.deepEqual(fixBatches[0]?.map((issue) => issue.description), ["must fix"]);
+  assert.deepEqual(fixBatches[0]?.map((issue) => issue.description), ["must fix", "[manual] can wait"]);
 });
 
-test("reviewStep accepts manual-only minor issues without applyFixes", async () => {
+test("reviewStep sends manual-only minor issues into applyFixes", async () => {
   const { orchestrator, specPath } = createOrchestrator();
   const anyOrchestrator = orchestrator as any;
   let fixCalls = 0;
-  anyOrchestrator.applyFixes = async () => { fixCalls++; };
+  let calls = 0;
+  let fixedIssues: ReviewIssue[] = [];
+  anyOrchestrator.applyFixes = async (issues: ReviewIssue[]) => {
+    fixCalls++;
+    fixedIssues = issues;
+  };
 
   const result = await anyOrchestrator.reviewStep(
-    async () => ({
-      reviewer: "self_criteria",
-      checklist: [],
-      issues: [minor("[manual] file-wide constant extraction")],
-      isLgtm: false,
-    }),
+    async () => {
+      calls++;
+      return calls >= 2
+        ? { reviewer: "self_criteria", checklist: [], issues: [], isLgtm: true }
+        : {
+            reviewer: "self_criteria",
+            checklist: [],
+            issues: [minor("[manual] file-wide constant extraction")],
+            isLgtm: false,
+          };
+    },
     {
       targetFiles: ["target.ts"],
       scopeAllowedTools: [],
@@ -253,39 +263,47 @@ test("reviewStep accepts manual-only minor issues without applyFixes", async () 
     },
   );
 
-  assert.equal(result.isLgtm, false);
-  assert.equal(fixCalls, 0);
-  assert.equal(orchestrator.getRecords().at(-1)?.decision, "accepted");
+  assert.equal(result.isLgtm, true);
+  assert.equal(fixCalls, 1);
+  assert.deepEqual(fixedIssues.map((issue) => issue.description), ["[manual] file-wide constant extraction"]);
 });
 
-test("reviewStep escalates manual blocking issues", async () => {
+test("reviewStep applies fixes for manual major issues", async () => {
   const { orchestrator, specPath } = createOrchestrator();
   const anyOrchestrator = orchestrator as any;
   let fixCalls = 0;
-  anyOrchestrator.applyFixes = async () => { fixCalls++; };
+  let calls = 0;
+  let fixedIssues: ReviewIssue[] = [];
+  anyOrchestrator.applyFixes = async (issues: ReviewIssue[]) => {
+    fixCalls++;
+    fixedIssues = issues;
+  };
 
-  await assert.rejects(
-    () => anyOrchestrator.reviewStep(
-      async () => ({
-        reviewer: "self_criteria",
-        checklist: [],
-        issues: [major("[manual] changing validation order is required")],
-        isLgtm: false,
-      }),
-      {
-        targetFiles: ["target.ts"],
-        scopeAllowedTools: [],
-        specPath,
-        getFileDiff: async () => "",
-        runTests: async () => {},
-        reviewMode: "implementation",
-      },
-    ),
-    DriftError,
+  const result = await anyOrchestrator.reviewStep(
+    async () => {
+      calls++;
+      return calls >= 2
+        ? { reviewer: "self_criteria", checklist: [], issues: [], isLgtm: true }
+        : {
+            reviewer: "self_criteria",
+            checklist: [],
+            issues: [major("[manual] changing validation order is required")],
+            isLgtm: false,
+          };
+    },
+    {
+      targetFiles: ["target.ts"],
+      scopeAllowedTools: [],
+      specPath,
+      getFileDiff: async () => "",
+      runTests: async () => {},
+      reviewMode: "implementation",
+    },
   );
 
-  assert.equal(fixCalls, 0);
-  assert.equal(orchestrator.getRecords().at(-1)?.decision, "escalated");
+  assert.equal(result.isLgtm, true);
+  assert.equal(fixCalls, 1);
+  assert.deepEqual(fixedIssues.map((issue) => issue.description), ["[manual] changing validation order is required"]);
 });
 
 test("parseFixPlan fails closed when repairs omit an issue", () => {
