@@ -31,7 +31,6 @@
 
 ### レポート品質
 
-- [ ] `generateJudgmentSummary` を指摘単位の理由生成に改善
 - [ ] レポート出力フォーマットの選択肢（Markdown / JSON）
 
 ### 運用改善
@@ -82,8 +81,11 @@ steps:
   impl_external_review: codex
   lint_fix: claude
   apply_fixes: claude
-  judgment_summary: claude
   judge_minor: claude
+  spec_generate: claude
+  spec_review: claude
+  test_case_generate: claude
+  spec_tc_review: claude
 ```
 
 対話プロンプトで実行前に変更可能。`--no-interactive` でスキップ。

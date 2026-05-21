@@ -40,11 +40,10 @@ description: TDD ハーネスの操作とワークフロー実行を支援する
 
 ### バックエンド
 1. `design` 初回実行で仕様書を生成する
-2. 人間が仕様書を確認し、frontmatter の `status` を `ready` にする
-3. 同じ `design` コマンドを再実行してテストケースを生成する
-4. 人間がテストケースを確認し、frontmatter の `status` を `ready` にする
-5. plan を用意する
-6. `impl` を実行する
+2. 同じ `design` 実行の中で `spec_review` と `spec_tc_review` まで自動で回る
+3. 人間が仕様書とテストケースを確認し、frontmatter の `status` を `ready` にする
+4. plan を用意する
+5. `impl` を実行する
 
 ### フロントエンド
 1. 仕様書・コンポーネント定義書・Figma キャッシュ・必要ならテストケースを ready にする
@@ -68,11 +67,12 @@ plan の詳細フォーマットは `/.harness/README.md` を正本とする。
 
 ### design フロー生成物を ready にする前の確認
 
+- 仕様書に DTO / Protocol の振る舞い、公開 API の形、モジュール構成パス、テストダブルのシグネチャ根拠が書かれているか確認する
 - テストケース仕様書の `期待結果` に検証粒度が書かれているか確認する
 - ログ検証なら、イベント名、必須キー、期待値、件数制約、追加キー許容の有無を明示する
 - 例外検証なら、例外型、`message`、`cause chain`、ログ記録有無のうち何を確認するかを明示する
 - 値検証なら、`完全一致` / `含まれる` / `存在確認` を区別する
-- この粒度が曖昧なまま impl に進めると、`review-test-quality` が収束しにくい
+- この粒度や契約が曖昧なまま impl に進めると、`spec_review` / `spec_tc_review` や `review-test-quality` が収束しにくい
 
 ### plan の書き方
 

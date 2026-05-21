@@ -12,10 +12,11 @@ profiles:
       impl_external_review: claude
       lint_fix: codex
       apply_fixes: codex
-      judgment_summary: codex
       judge_minor: codex
       spec_generate: codex
+      spec_review: codex
       test_case_generate: codex
+      spec_tc_review: codex
       component_generate: codex
       component_self_review: codex
       page_generate: codex
@@ -39,7 +40,11 @@ profiles:
       stepOverrides:
         spec_generate:
           agent: harness-backend-design
+        spec_review:
+          agent: harness-backend-design
         test_case_generate:
+          agent: harness-backend-design
+        spec_tc_review:
           agent: harness-backend-design
         test_generate:
           agent: harness-backend-test
@@ -84,10 +89,11 @@ profiles:
       impl_external_review: claude
       lint_fix: codex
       apply_fixes: codex
-      judgment_summary: codex
       judge_minor: codex
       spec_generate: codex
+      spec_review: codex
       test_case_generate: codex
+      spec_tc_review: codex
       component_generate: codex
       component_self_review: codex
       page_generate: codex

@@ -42,10 +42,11 @@ profiles:
       impl_external_review: claude
       lint_fix: codex
       apply_fixes: codex
-      judgment_summary: codex
       judge_minor: codex
       spec_generate: codex
+      spec_review: codex
       test_case_generate: codex
+      spec_tc_review: codex
       component_generate: codex
       component_self_review: codex
       page_generate: codex
@@ -100,10 +101,11 @@ profiles:
       impl_external_review: claude
       lint_fix: codex
       apply_fixes: codex
-      judgment_summary: codex
       judge_minor: codex
       spec_generate: codex
+      spec_review: codex
       test_case_generate: codex
+      spec_tc_review: codex
       component_generate: codex
       component_self_review: codex
       page_generate: codex
@@ -141,10 +143,11 @@ profiles:
       impl_external_review: claude
       lint_fix: codex
       apply_fixes: codex
-      judgment_summary: codex
       judge_minor: codex
       spec_generate: codex
+      spec_review: codex
       test_case_generate: codex
+      spec_tc_review: codex
       component_generate: codex
       component_self_review: codex
       page_generate: codex
@@ -175,10 +178,11 @@ profiles:
       impl_external_review: claude
       lint_fix: codex
       apply_fixes: codex
-      judgment_summary: codex
       judge_minor: codex
       spec_generate: codex
+      spec_review: codex
       test_case_generate: codex
+      spec_tc_review: codex
       component_generate: codex
       component_self_review: codex
       page_generate: codex

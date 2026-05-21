@@ -208,11 +208,7 @@ impl フロー完了時に、レビューサイクルの全記録から人間が
 
 **データ収集**:
 - `review-orchestrator.ts` がレビュー中に `ReviewRecord[]` をメモリに蓄積
-- 各レコードに `diffBefore` / `diffAfter`（git diff）と `judgmentSummary`（claude -p 要約）を含む
-
-**判断理由の生成**:
-- 修正のたびに claude -p で「なぜこの修正が必要だったか」を 3 行以内で要約
-- 修正後の diff を含めて判断の経緯をトレース可能にする
+- 各レコードに `findings` / `decision` / `diffBefore` / `diffAfter` を保持する
 
 **設計判断の記録**:
 - 計画ファイルの `## 設計判断` セクションから読み取り
@@ -232,7 +228,6 @@ type ReviewRecord = {
   decision: "fixed" | "accepted" | "escalated" | "lgtm";
   diffBefore: string;
   diffAfter: string;
-  judgmentSummary: string; // claude -p で生成した判断理由
 };
 ```
 
