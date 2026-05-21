@@ -623,3 +623,68 @@ test("applyFixes retries implementation fixes when post-fix tests fail", async (
     ],
   );
 });
+
+test("applyFixes includes design requirements in plan and execute prompts", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-review-design-scope-"));
+  const specPath = join(root, "spec.md");
+  writeFileSync(specPath, "# spec\n", "utf-8");
+  const logger = new HarnessLogger("review-design-scope", { baseDir: root });
+  const registry = {
+    getConfig() {
+      return { templates: {} };
+    },
+    getRunner() {
+      return {
+        async run() {
+          return { text: "{\"checklist\":[{\"item\":\"ok\",\"verdict\":\"pass\",\"evidence\":\"done\"}],\"issues\":[]}" };
+        },
+      };
+    },
+    isStepSkipped() {
+      return false;
+    },
+    getFallbackRunner() {
+      return this.getRunner();
+    },
+  } as any;
+  const orchestrator = new ReviewOrchestrator(logger, { async check() {} } as any, root, registry);
+  const anyOrchestrator = orchestrator as any;
+  const prompts: string[] = [];
+  let executeRunCalls = 0;
+  anyOrchestrator.executeRun = async (_step: string, prompt: string) => {
+    executeRunCalls++;
+    prompts.push(prompt);
+    if (executeRunCalls === 1) {
+      return JSON.stringify({
+        summary: "remove out-of-scope topic handling",
+        repairs: [{
+          goal: "mark topic handling as out of scope",
+          files: ["spec.md"],
+          instructions: ["remove the topic section and add a scope-out note"],
+          constraints: ["do not add cross-store join behavior"],
+          related_issues: [1],
+        }],
+        global_constraints: ["do not add out-of-scope features"],
+      });
+    }
+    return "";
+  };
+
+  await anyOrchestrator.applyFixes(
+    [{ file: "spec.md", line: 1, severity: "major", description: "topic の責務境界が未定義" }],
+    {
+      targetFiles: ["spec.md"],
+      scopeAllowedTools: ["Write(spec/*)"],
+      specPath,
+      reviewMode: "design",
+      designRequirements: "タグフィルタは cross-store join が必要なためスコープ外。topic 解決機能は不要。",
+    },
+  );
+
+  assert.match(prompts[0] ?? "", /## スコープ制約（requirements 原文）/);
+  assert.match(prompts[0] ?? "", /topic 解決機能は不要/);
+  assert.match(prompts[0] ?? "", /除外する修正も有効/);
+  assert.match(prompts[1] ?? "", /## Scope Constraints \(requirements 原文\)/);
+  assert.match(prompts[1] ?? "", /スコープ外/);
+  assert.match(prompts[1] ?? "", /除外明記/);
+});

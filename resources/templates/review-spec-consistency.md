@@ -8,6 +8,9 @@
 ## Harness scope / sourceLayout
 {{designContextText}}
 
+## requirements
+{{requirements}}
+
 ## 仕様書
 {{spec}}
 
@@ -32,6 +35,11 @@
 5. テストダブルのシグネチャ決定可能性
 - 依存 Protocol や公開 API のメソッドシグネチャ（引数名・主要な型・戻り値）が、仕様書から一意に導出できるか
 - 後続のテスト生成で `*args, **kwargs` や推測 helper に逃げないと書けない状態になっていないか
+
+6. スコープ整合性
+- requirements でスコープ外 / 不要と明示された機能が仕様書に含まれていないか
+- 仕様書が requirements のスコープを超えて拡張されていないか
+- スコープ外として除外すべきものを、未定義という理由で勝手に仕様追加していないか
 
 ## 指摘ルール
 - 1 issue = 1 欠陥にする

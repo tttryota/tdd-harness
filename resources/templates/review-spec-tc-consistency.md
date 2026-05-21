@@ -8,6 +8,10 @@ impl のしやすさや一般的なテスト設計論ではなく、spec と TC 
 - 仕様書: {{specPath}}
 - テストケース: {{testCasesPath}}
 
+## requirements
+
+{{requirements}}
+
 ## 仕様書
 
 {{spec}}
@@ -38,6 +42,8 @@ impl のしやすさや一般的なテスト設計論ではなく、spec と TC 
    - 具体例と異なる具体値を TC が置いているなら fail
 5. spec 未記載の振る舞いを TC が勝手に期待していないか
    - TC 側だけが具体的で、spec 側に契約がないなら fail
+6. requirements でスコープ外 / 不要と明示された機能を spec / TC が勝手に対象化していないか
+   - 未定義だからといって scope 外機能を spec/TC に追加していたら fail
 
 ## fail にしないもの
 

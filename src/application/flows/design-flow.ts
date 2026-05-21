@@ -88,7 +88,7 @@ export class DesignFlow {
 
     const specReadyAfterLoad = isReadyLikeStatus(this.boundary.readFrontmatter(specPath).status);
     if (!specReadyAfterLoad) {
-      await this.runSpecReview(specPath, specAllowedTools, logger, specReviewContext);
+      await this.runSpecReview(specPath, specAllowedTools, logger, specReviewContext, requirements);
     }
 
     if (existsSync(tcPath)) {
@@ -101,7 +101,7 @@ export class DesignFlow {
       console.log(`テストケースを生成しました: ${tcPath}`);
     }
 
-    await this.runSpecTcReview(specPath, tcPath, reviewAllowedTools, logger);
+    await this.runSpecTcReview(specPath, tcPath, reviewAllowedTools, logger, requirements);
 
     const specFm = this.boundary.readFrontmatter(specPath);
     const tcFm = this.boundary.readFrontmatter(tcPath);
@@ -250,6 +250,7 @@ ${template}
     testCasesPath: string,
     scopeAllowedTools: string[],
     logger: Logger,
+    designRequirements: string,
   ): Promise<void> {
     const lintGuard = { async check() {} } as any;
     const orchestrator = new ReviewOrchestrator(
@@ -268,6 +269,7 @@ ${template}
         criteriaPaths: [],
         scopeAllowedTools,
         reviewMode: "design",
+        designRequirements,
       });
     } catch (error: unknown) {
       if (error instanceof DriftError) {
@@ -286,6 +288,7 @@ ${template}
     scopeAllowedTools: string[],
     logger: Logger,
     designContextText: string,
+    designRequirements: string,
   ): Promise<void> {
     const lintGuard = { async check() {} } as any;
     const orchestrator = new ReviewOrchestrator(
@@ -304,6 +307,7 @@ ${template}
         scopeAllowedTools,
         reviewMode: "design",
         designContextText,
+        designRequirements,
       });
     } catch (error: unknown) {
       if (error instanceof DriftError) {

@@ -17,6 +17,7 @@ function createRegistry(
     specReviewResponses?: string[];
     specTcReviewResponses?: string[];
     onApplyFixes?: (request: { prompt: string; allowedTools?: string[] }) => void;
+    onPlanFixes?: (request: { prompt: string; allowedTools?: string[] }) => void;
   },
 ) {
   const requests: Array<{ step: string; allowedTools?: string[]; prompt: string }> = [];
@@ -46,6 +47,7 @@ function createRegistry(
           }
           if (step === FLOW_STEP.APPLY_FIXES) {
             if (request.prompt.includes("以下のレビュー指摘に対して、一括修正のための計画を作成してください。")) {
+              options?.onPlanFixes?.(request);
               return {
                 text: JSON.stringify({
                   summary: "fix spec/tc ambiguity",
@@ -174,6 +176,7 @@ test("DesignFlow falls back to bundled templates when project templates are abse
   assert.match(registry.requests[1]?.prompt ?? "", /仕様書整合性レビュー/);
   assert.match(registry.requests[1]?.prompt ?? "", /公開 API の形状明示/);
   assert.match(registry.requests[1]?.prompt ?? "", /テストダブルのシグネチャ決定可能性/);
+  assert.match(registry.requests[1]?.prompt ?? "", /## requirements/);
   assert.match(registry.requests[2]?.prompt ?? "", /# 検証焦点/);
   assert.match(registry.requests[2]?.prompt ?? "", /# 網羅性チェック/);
   assert.match(registry.requests[2]?.prompt ?? "", /\[要仕様追記\]/);
@@ -183,6 +186,7 @@ test("DesignFlow falls back to bundled templates when project templates are abse
   assert.match(registry.requests[3]?.prompt ?? "", /DTO \/ 入出力フィールドの振る舞い/);
   assert.match(registry.requests[3]?.prompt ?? "", /TC の「前提」欄の境界/);
   assert.match(registry.requests[3]?.prompt ?? "", /TC の「期待結果」の検証スコープ/);
+  assert.match(registry.requests[3]?.prompt ?? "", /## requirements/);
 });
 
 test("DesignFlow loads project template overrides from .harness/resources/templates", async () => {
@@ -253,6 +257,32 @@ test("DesignFlow passes spec-only scope into apply_fixes during spec_review", as
     "Write(docs/spec/quiz/*)",
     "Edit(docs/spec/quiz/*)",
   ]);
+});
+
+test("DesignFlow passes requirements into spec reviews and apply_fixes planning", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-design-flow-requirements-"));
+  const boundary = new Boundary(root);
+  const requirements = "タグフィルタは cross-store join が必要なためスコープ外。topic 解決機能は不要。";
+  let planPrompt = "";
+  const registry = createRegistry(root, {
+    specReviewResponses: [
+      "{\"checklist\":[{\"item\":\"scope\",\"verdict\":\"fail\",\"evidence\":\"missing scope\"}],\"issues\":[{\"file\":\"docs/spec/quiz/result.md\",\"line\":1,\"severity\":\"major\",\"description\":\"topic の責務境界が未定義\"}]}",
+      "{\"checklist\":[{\"item\":\"scope\",\"verdict\":\"pass\",\"evidence\":\"done\"}],\"issues\":[]}",
+    ],
+    onPlanFixes(request) {
+      planPrompt = request.prompt;
+    },
+  });
+  const flow = new DesignFlow(boundary, registry);
+  const logger = new HarnessLogger("design-test-requirements", { baseDir: root });
+
+  await flow.run("quiz/result", requirements, logger);
+
+  assert.match(registry.requests[1]?.prompt ?? "", /cross-store join が必要なためスコープ外/);
+  assert.match(registry.requests[3]?.prompt ?? "", /cross-store join が必要なためスコープ外/);
+  assert.match(planPrompt, /## スコープ制約（requirements 原文）/);
+  assert.match(planPrompt, /スコープ外/);
+  assert.match(planPrompt, /除外する修正も有効/);
 });
 
 test("DesignFlow spec_review stops after two non-converging cycles", async () => {
