@@ -6,20 +6,23 @@ description: TDD ハーネスの操作とワークフロー実行を支援する
 # Harness Pilot
 
 この skill は `.harness/` 配下のハーネス全体を操作するための運用ガイド。
-まず `/.harness/README.md` を読み、必要に応じて `/.harness/docs/setup-guide.md` と `/.harness/docs/architecture.md` を追加で読むこと。
+まず `/.harness/README.md` を読むこと。実装詳細や内部構造が必要な場合のみ `/.harness/docs/architecture.md` と `/.harness/logs/README.md` を追加で読むこと。
 
 ## 最初に確認すること
 
-1. 実行入口は `./.harness/bin/harness`
-2. 実設定は `.harness/config/harness.yml`
-3. 追跡対象のサンプル設定は `.harness/config/harness.example.yml`
-4. 配布用 skill 正本は `.harness/resources/skills/`
-5. 直接利用のための `.codex/skills/` と `.claude/skills/` への展開は `./.harness/bin/harness sync-skills`
+1. `.harness/config/harness.yml` があるか確認する。無ければ `.harness/config/harness.example.yml` を元に作る。
+2. どの profile を使うか決める。通常は `backend` か `frontend` のどちらか。
+3. 選んだ profile の `steps` と `runners` が、使いたい LLM と lint/test ツールに整合しているか確認する。
+4. 実行結果は `.harness/logs/` と `.harness/reviews/` に出ると理解する。失敗時は `harness.jsonl`、`review-data.json`、`checkpoint.json` を先に見る。
+5. Codex / Claude からこの skill を直接使う運用なら `./.harness/bin/harness sync-skills` で `.codex/skills/` と `.claude/skills/` を同期する。
+6. ここまで確認してから `design` / `impl` / `component` / `page` のどれを使うか選ぶ。
 
 ## AI への基本動作
 
 - ハーネスの使い方を質問されたら、まず `/.harness/README.md` を根拠に答える
-- ハーネス実行を依頼されたら、必要なら README と setup-guide を読み直してから適切なコマンドを選ぶ
+- ハーネス実行を依頼されたら、設定未整備なら先に profile 整備を案内し、整ってから適切なコマンドを選ぶ
+- 実行依頼を受けたら `.harness/logs/` と `.harness/reviews/` が観測先だと前提共有する
+- 障害調査や比較が主目的なら `benchmark-summary` / `benchmark-diagnose` を優先する
 - plan / spec / test_cases / component_spec / figma_cache の前提が不足している場合は、足りない入力を具体的に指摘する
 - `.harness/resources/` は配布物、`.harness/config/harness.yml` と `.harness/logs/` と `.harness/reviews/` はローカル生成物として扱う
 
@@ -27,8 +30,7 @@ description: TDD ハーネスの操作とワークフロー実行を支援する
 
 | コマンド | 用途 |
 |---|---|
-| `./.harness/bin/harness init` | セットアップガイド表示 |
-| `./.harness/bin/harness sync-skills` | 配布用 skill を `.codex/skills/` と `.claude/skills/` に同期 |
+| `./.harness/bin/harness sync-skills` | `harness-pilot` と project-local skills を `.codex/skills/` と `.claude/skills/` に同期 |
 | `./.harness/bin/harness design [--profile <name>] <category/name> "<requirements>"` | 仕様書・テストケース生成 |
 | `./.harness/bin/harness impl <plan-file> [--resume] [--flow full\|light] [--no-interactive]` | TDD 実装 |
 | `./.harness/bin/harness component <plan-file> [--flow full\|light] [--no-interactive]` | Component + Story 実装 |

@@ -8,8 +8,10 @@
 .harness/logs/
 └── {timestamp}_{task_name}/
     ├── harness.jsonl          # ハーネスのイベントログ（JSON Lines）
+    ├── codex-review.log       # codex / generic runner のコマンド実行ログ
     ├── claude-code.log        # Claude runner の入出力ログ
     ├── codex-app-server.log   # Codex App Server の transcript
+    ├── review-data.json       # レビュー構造化データ
     └── checkpoint.json        # 途中再開用のチェックポイント
 ```
 
