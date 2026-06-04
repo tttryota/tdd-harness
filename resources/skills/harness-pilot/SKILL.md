@@ -6,7 +6,7 @@ description: TDD ハーネスの操作とワークフロー実行を支援する
 # Harness Pilot
 
 この skill は `.harness/` 配下のハーネス全体を操作するための運用ガイド。
-まず `/.harness/README.md` を読むこと。実装詳細や内部構造が必要な場合のみ `/.harness/docs/architecture.md` と `/.harness/logs/README.md` を追加で読むこと。
+まず `/.harness/README.md` を読むこと。README は人間向けの概要と起動手順をまとめた正本であり、この skill は AI 向けの運用詳細を補う。実装詳細や内部構造が必要な場合のみ `/.harness/docs/architecture.md` と `/.harness/logs/README.md` を追加で読むこと。
 
 ## 最初に確認すること
 
@@ -14,13 +14,15 @@ description: TDD ハーネスの操作とワークフロー実行を支援する
 2. どの profile を使うか決める。現時点では `backend` を基準とし、`frontend` フローは TBD / 開発中として扱う。
 3. 選んだ profile の `steps` と `runners` が、使いたい LLM と lint/test ツールに整合しているか確認する。
 4. 実行結果は `.harness/logs/` と `.harness/reviews/` に出ると理解する。失敗時は `harness.jsonl`、`review-data.json`、`checkpoint.json` を先に見る。
-5. Codex / Claude からこの skill を直接使う運用なら `./.harness/bin/harness sync-skills` で `.codex/skills/` と `.claude/skills/` を同期する。
-6. ここまで確認してから `design` / `impl` / `component` / `page` のどれを使うか選ぶ。
+5. Codex / Claude からこの skill を直接使う運用なら、`.harness/resources/skills/` を `.codex/skills/` / `.claude/skills/` に反映する。`./.harness/bin/harness sync-skills` を使うか、手動でコピーする。
+6. ここまで確認してから、必要なフローと入力ファイルを判断する。
 
 ## AI への基本動作
 
 - ハーネスの使い方を質問されたら、まず `/.harness/README.md` を根拠に答える
 - ハーネス実行を依頼されたら、設定未整備なら先に profile 整備を案内し、整ってから適切なコマンドを選ぶ
+- `Impl` を主フローとして扱い、`plan` とその参照先が揃っているかを先に確認する
+- `Design` は `Impl` の入力となる spec / test cases を準備するための補助フローとして扱う
 - 実行依頼を受けたら `.harness/logs/` と `.harness/reviews/` が観測先だと前提共有する
 - 障害調査や比較が主目的なら `benchmark-summary` / `benchmark-diagnose` を優先する
 - plan / spec / test_cases / component_spec / figma_cache の前提が不足している場合は、足りない入力を具体的に指摘する
@@ -41,10 +43,10 @@ description: TDD ハーネスの操作とワークフロー実行を支援する
 ## 典型フロー
 
 ### バックエンド
-1. `design` 初回実行で仕様書を生成する
-2. 同じ `design` 実行の中で `spec_review` と `spec_tc_review` まで自動で回る
-3. 人間が仕様書とテストケースを確認し、frontmatter の `status` を `ready` にする
-4. plan を用意する
+1. `plan` / `spec` / `test_cases` が揃っているか確認する
+2. spec / test_cases が未作成なら `design` で作る
+3. `design` 実行後、人間が仕様書とテストケースを確認し、frontmatter の `status` を `ready` にする
+4. `plan` を用意または更新する
 5. `impl` を実行する
 
 ### フロントエンド
@@ -93,6 +95,7 @@ plan の詳細フォーマットは `/.harness/README.md` を正本とする。
 ## skill と設定の関係
 
 - `profile.context.defaultSkills` と `profile.context.stepOverrides.<step>.skills` が runtime skill 名
+- 各 step で注入される skill は、`profile.context.defaultSkills` と、その step に対応する `profile.context.stepOverrides.<step>.skills` だけ
 - ハーネス内部実行時の探索順:
   1. `.codex/skills/<name>/SKILL.md`
   2. `.harness/resources/skills/<name>/SKILL.md`
