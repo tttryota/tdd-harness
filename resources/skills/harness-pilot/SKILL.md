@@ -11,7 +11,7 @@ description: TDD ハーネスの操作とワークフロー実行を支援する
 ## 最初に確認すること
 
 1. `.harness/config/harness.yml` があるか確認する。無ければ `.harness/config/harness.example.yml` を元に作る。
-2. どの profile を使うか決める。通常は `backend` か `frontend` のどちらか。
+2. どの profile を使うか決める。現時点では `backend` を基準とし、`frontend` フローは TBD / 開発中として扱う。
 3. 選んだ profile の `steps` と `runners` が、使いたい LLM と lint/test ツールに整合しているか確認する。
 4. 実行結果は `.harness/logs/` と `.harness/reviews/` に出ると理解する。失敗時は `harness.jsonl`、`review-data.json`、`checkpoint.json` を先に見る。
 5. Codex / Claude からこの skill を直接使う運用なら `./.harness/bin/harness sync-skills` で `.codex/skills/` と `.claude/skills/` を同期する。
@@ -48,9 +48,8 @@ description: TDD ハーネスの操作とワークフロー実行を支援する
 5. `impl` を実行する
 
 ### フロントエンド
-1. 仕様書・コンポーネント定義書・Figma キャッシュ・必要ならテストケースを ready にする
-2. `/harness-plan-fe <spec-path>` で plan 群を生成する
-3. `component` → `impl` → `page` の順で実行する
+1. フロントエンド向けフローは TBD / 開発中として扱う
+2. `component` / `page` / `/harness-plan-fe` を使う前に、現行 README と実装差分を確認する
 
 ## plan の見方
 
