@@ -526,7 +526,7 @@ function requireProfiles(config: HarnessUserConfig): HarnessUserConfig {
     return config;
   }
   throw new GuardError(
-    `profiles が定義されていません。${configLocationMessage()} に profiles を追加してください。\n\`./.harness/bin/harness init\` でセットアップガイドを表示できます。`,
+    `profiles が定義されていません。${configLocationMessage()} に profiles を追加してください。\n\`./.harness/config/harness.example.yml\` と \`README.md\` を参照して \`.harness/config/harness.yml\` を作成してください。`,
   );
 }
 

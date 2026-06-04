@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { HarnessLogger, DEFAULT_LOG_BASE_DIR } from "../infrastructure/logging/logger.ts";
@@ -38,7 +37,6 @@ export const LOCAL_CLI_NAME = "./.harness/bin/harness";
 export type CliRuntime = {
   cwd: () => string;
   isTTY: boolean;
-  readGuide: (path: string) => string;
   writeStdout: (line: string) => void;
   writeStderr: (line: string) => void;
 };
@@ -108,7 +106,6 @@ export type CliDeps = {
 const defaultRuntime: CliRuntime = {
   cwd: () => process.cwd(),
   isTTY: Boolean(process.stdin.isTTY),
-  readGuide: (path) => readFileSync(path, "utf-8"),
   writeStdout: (line) => console.log(line),
   writeStderr: (line) => console.error(line),
 };
@@ -158,7 +155,6 @@ export function usageLines(cliName = LOCAL_CLI_NAME): string[] {
     `  ${cliName} benchmark-summary <log-dir> [<log-dir>]`,
     `  ${cliName} benchmark-diagnose <log-dir> [<log-dir>]`,
     `  ${cliName} sync-skills`,
-    `  ${cliName} init`,
   ];
 }
 
@@ -383,16 +379,6 @@ function runBenchmarkDiagnoseCommand(
   return 0;
 }
 
-function runInitCommand(runtime: CliRuntime): number {
-  const guidePath = join(import.meta.dirname ?? "", "..", "..", "docs", "setup-guide.md");
-  try {
-    runtime.writeStdout(runtime.readGuide(guidePath));
-    return 0;
-  } catch {
-    throw new HarnessError("setup-guide.md が見つかりません。ハーネスが正しく配置されていることを確認してください。");
-  }
-}
-
 function runSyncSkillsCommand(projectRoot: string, runtime: CliRuntime, deps: CliDeps): number {
   const skills = deps.syncBundledSkills(projectRoot);
   runtime.writeStdout(`Synced harness skills to .codex/skills and .claude/skills: ${skills.join(", ")}`);
@@ -408,10 +394,6 @@ export async function runCli(
   if (!command) {
     writeLines(runtime, usageLines());
     return 1;
-  }
-
-  if (command === "init") {
-    return runInitCommand(runtime);
   }
 
   const projectRoot = runtime.cwd();

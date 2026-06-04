@@ -469,7 +469,7 @@ runners:
 
   assert.throws(
     () => loadConfig(mkdtempSync(join(tmpdir(), "harness-config-missing-profiles-"))),
-    /`\.\/\.harness\/bin\/harness init`/,
+    /`\.\/\.harness\/config\/harness\.example\.yml` と `README\.md`/,
   );
   assert.throws(() => resolveProfile(config, "missing"), /profile "missing" が見つかりません/);
 });

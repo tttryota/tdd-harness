@@ -14,7 +14,7 @@
 | 5 | boundary.ts | 実装済み | major 3件中2件修正済み | パス境界・extractCategory 修正済み |
 | 6 | impl-flow.ts, review-orchestrator.ts | 実装済み | major 5件修正済み（4回） | major なし確認 |
 | 7 | drift-guard.ts | 実装済み | major 2件修正済み（3回） | major なし確認 |
-| 8 | README.md, setup-guide.md | 実装済み | major 4件修正済み（3回） | major なし確認 |
+| 8 | README.md, setup-guide.md（後に README へ統合） | 実装済み | major 4件修正済み（3回） | major なし確認 |
 
 ## Phase 6 で解消予定の既知 major
 
@@ -39,7 +39,7 @@
 ## Phase 7-8 でやること
 
 - Phase 7: drift-guard.ts の codexAvailable デフォルト false + registry 判定
-- Phase 8: setup-guide.md 新規作成 + README.md セットアップセクション刷新
+- Phase 8: setup-guide.md 新規作成 + README.md セットアップセクション刷新（後に README へ統合）
 
 ## 変更済みファイル一覧
 
@@ -48,7 +48,7 @@
 .harness/src/config.ts        — 全面書き換え（profiles + UserConfig/ResolvedConfig + validation）
 .harness/src/launcher.ts      — 新規作成（preferLocal PATH + safeExec + runTool）
 .harness/src/plan-parser.ts   — 新規作成（parsePlan + 境界チェック）
-.harness/src/harness.ts       — 配線変更（parsePlan → profile → adapter → Boundary）+ init
+.harness/src/harness.ts       — 配線変更（parsePlan → profile → adapter → Boundary）+ init（後に削除）
 .harness/src/lint-guard.ts    — 全面書き換え（adapter ループ + runTool + rescanFiles）
 .harness/src/boundary.ts      — 全面書き換え（sourceLayout 駆動 + allowedTools 汎用化）
 .harness/src/impl-flow.ts     — 全面書き換え（ctor 拡張、CriteriaResolver、TestAdapter+runTool、テンプレート化、runTests コールバック）
@@ -57,7 +57,7 @@
 .harness/resources/templates/test-generate.md — 新規作成（テスト生成プロンプト）
 .harness/resources/templates/impl-generate.md — 新規作成（実装生成プロンプト）
 .harness/resources/templates/impl-retry.md — 新規作成（実装リトライプロンプト）
-.harness/docs/setup-guide.md  — 新規作成（`./.harness/bin/harness init` 用セットアップガイド）
+.harness/docs/setup-guide.md  — 新規作成（当時の `./.harness/bin/harness init` 用セットアップガイド。後に README へ統合）
 .harness/README.md            — profiles セクション追加、前提条件汎用化、ツール一覧追加
 .harness/package.json         — ローカル実行用 scripts を整備
 .harness/src/types.ts         — TaskPlan に profile? 追加

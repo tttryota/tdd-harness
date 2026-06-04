@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,7 +12,6 @@ function makeRuntime(overrides?: Partial<CliRuntime>) {
   const runtime: CliRuntime = {
     cwd: () => mkdtempSync(join(tmpdir(), "harness-cli-")),
     isTTY: false,
-    readGuide: () => "guide",
     writeStdout: (line) => stdout.push(line),
     writeStderr: (line) => stderr.push(line),
     ...overrides,
@@ -131,7 +130,7 @@ test("runCli accepts design --profile before or after positional arguments", asy
   assert.deepEqual(resolvedProfiles, ["backend", "backend"]);
 });
 
-test("runCli renders benchmark commands and init", async () => {
+test("runCli renders benchmark commands and sync-skills", async () => {
   const { runtime, stdout } = makeRuntime();
   const deps = makeDeps();
 
@@ -139,8 +138,6 @@ test("runCli renders benchmark commands and init", async () => {
   assert.equal(stdout.pop(), "summary:a");
   assert.equal(await runCli(["benchmark-diagnose", "a", "b"], runtime, deps), 0);
   assert.equal(stdout.pop(), "diagnose:a,b");
-  assert.equal(await runCli(["init"], runtime, deps), 0);
-  assert.equal(stdout.pop(), "guide");
   assert.equal(await runCli(["sync-skills"], runtime, deps), 0);
   assert.match(stdout.pop() ?? "", /harness-pilot/);
 });
@@ -180,18 +177,9 @@ test("design command requests --profile when multiple profiles exist", async () 
   assert.match(stderr[0] ?? "", /design コマンドでは --profile <name> を追加してください/);
 });
 
-test("runCli reports init guide read failures", async () => {
-  const { runtime, stderr } = makeRuntime({
-    readGuide() {
-      throw new Error("missing");
-    },
-  });
-  assert.equal(await main(["init"], runtime, makeDeps()), 1);
-  assert.match(stderr[0] ?? "", /setup-guide\.md が見つかりません/);
-});
-
 test("repo-local wrapper launches the CLI from .harness/bin/harness", () => {
   const wrapperPath = join(import.meta.dirname ?? "", "..", "..", "bin", "harness");
-  const output = execFileSync(wrapperPath, ["init"], { encoding: "utf-8" });
-  assert.match(output, /Harness セットアップガイド/);
+  const result = spawnSync(wrapperPath, [], { encoding: "utf-8" });
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /Usage:/);
 });
