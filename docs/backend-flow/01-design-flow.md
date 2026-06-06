@@ -15,7 +15,7 @@
 
 - spec ファイル
 - test_cases ファイル
-- 必要に応じた review 修正結果
+- 必要に応じたレビュー修正結果
 
 ## 正常系の進行
 
@@ -36,13 +36,13 @@
 ## 停止条件
 
 - spec または test_cases の生成結果が出力先に存在しない
-- review が最大サイクル内で収束しない
-- review 修正後も spec / test_cases の `status` が `ready` にならない
+- レビューが最大サイクル内で収束しない
+- レビュー修正後も spec / test_cases の `status` が `ready` にならない
 
 ## 人間判断へ戻す条件
 
 - `spec_tc_review` 完了後も spec / test_cases のどちらかが `ready` でない
-- review 指摘を踏まえて frontmatter の `status` を更新する必要がある
+- レビュー指摘を踏まえて frontmatter の `status` を更新する必要がある
 
 ## 不変条件
 
