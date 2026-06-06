@@ -1,5 +1,5 @@
 {
-  "name": "obsidian-harness",
+  "name": "tdd-harness",
   "version": "0.1.0",
   "type": "module",
   "engines": {

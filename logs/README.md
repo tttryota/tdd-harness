@@ -22,8 +22,3 @@
 - lint / test / review の実行結果
 - セルフレビュー・external review の指摘内容
 - 迷走ガードやエスカレーションの記録
-
-## 注意
-
-- 現在のログ出力先は `/.harness/logs/` であり、repo 直下 `logs/` は旧配置です
-- このディレクトリ配下の実行ログ本体は `.gitignore` で除外し、この README だけを追跡します
