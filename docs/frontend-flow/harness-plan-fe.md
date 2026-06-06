@@ -1,11 +1,8 @@
----
-name: harness-plan-fe
-description: フロントエンド仕様書から Component / Logic / Page plan 群を生成する配布用 skill。トリガー: "/harness-plan-fe"
----
+# Harness Plan FE (Draft)
 
-# Harness Plan FE
+フロントエンド仕様書から `component` / `impl` / `page` plan 群を生成するための下書きメモ。
 
-この skill は ready の仕様書から `component` / `impl` / `page` plan を作る。
+この文書は frontend フローが固まるまでの退避先であり、現時点では draft 扱いとする。
 まず `/.harness/README.md` を読み、必要なら `/.harness/docs/architecture.md` を読むこと。
 
 ## 入力前提
@@ -41,17 +38,20 @@ description: フロントエンド仕様書から Component / Logic / Page plan 
 ## type ごとの責務
 
 ### component
+
 - 新規コンポーネント定義
 - Story を含める
 - API / atom / hooks を実装対象に含めない
 - MSW を使わない
 
 ### impl
+
 - hooks / atoms / API クライアント
 - JSX を含めない
 - 必要なら `msw: true`
 
 ### page
+
 - component と logic の接続
 - レイアウト、画面遷移、browser verification の対象整理
 - 新規コンポーネントやロジック本体をここで増やさない

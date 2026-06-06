@@ -25,6 +25,7 @@ description: TDD ハーネスの操作とワークフロー実行を支援する
 - `Design` は `Impl` の入力となる spec / test cases を準備するための補助フローとして扱う
 - 実行依頼を受けたら `.harness/logs/` と `.harness/reviews/` が観測先だと前提共有する
 - 障害調査や比較が主目的なら `benchmark-summary` / `benchmark-diagnose` を優先する
+- review が noisy / weak なら `/.harness/resources/criteria/` を見直す
 - plan / spec / test_cases / component_spec / figma_cache の前提が不足している場合は、足りない入力を具体的に指摘する
 - `.harness/resources/` は配布物、`.harness/config/harness.yml` と `.harness/logs/` と `.harness/reviews/` はローカル生成物として扱う
 
@@ -51,7 +52,8 @@ description: TDD ハーネスの操作とワークフロー実行を支援する
 
 ### フロントエンド
 1. フロントエンド向けフローは TBD / 開発中として扱う
-2. `component` / `page` / `/harness-plan-fe` を使う前に、現行 README と実装差分を確認する
+2. `component` / `page` を使う前に、現行 README と実装差分を確認する
+3. 退避中の draft を見る場合だけ `/.harness/docs/frontend-flow/harness-plan-fe.md` を参照する
 
 ## plan の見方
 

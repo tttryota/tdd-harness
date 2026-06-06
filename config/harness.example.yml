@@ -36,7 +36,6 @@ profiles:
     criteriaPreset: backend
     context:
       defaultAgent: harness-backend-general
-      defaultSkills: [harness-backend-core]
       stepOverrides:
         spec_generate:
           agent: harness-backend-design
@@ -48,26 +47,19 @@ profiles:
           agent: harness-backend-design
         test_generate:
           agent: harness-backend-test
-          skills: [harness-backend-impl, harness-backend-failure-modes]
         test_self_quality:
           agent: harness-backend-reviewer
-          skills: [harness-backend-review-quality]
         test_external_review:
           agent: harness-backend-reviewer
-          skills: [harness-backend-review-quality]
         impl_generate:
           agent: harness-backend-impl
-          skills: [harness-backend-impl, harness-backend-failure-modes]
         impl_self_criteria:
           agent: harness-backend-reviewer
-          skills: [harness-backend-review-criteria]
         impl_self_quality:
           agent: harness-backend-reviewer
-          skills: [harness-backend-review-quality]
         impl_external_review:
           agent: harness-backend-reviewer
           model: claude-opus-4-6
-          skills: [harness-backend-review-quality]
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"

@@ -59,7 +59,7 @@ function makeDeps(overrides?: Partial<CliDeps>): CliDeps {
     createLogger: () => ({}) as any,
     renderBenchmarkSummary: (dirs) => `summary:${dirs.join(",")}`,
     renderBenchmarkDiagnose: (dirs) => `diagnose:${dirs.join(",")}`,
-    syncBundledSkills: () => ["harness-pilot", "harness-plan-fe"],
+    syncBundledSkills: () => ["harness-pilot"],
     ...overrides,
   };
   (base as any).runCalls = runCalls;
