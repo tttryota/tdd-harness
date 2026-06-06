@@ -7,7 +7,7 @@ import { HarnessLogger } from "../../infrastructure/logging/logger.ts";
 import { ReviewOrchestrator } from "./review-orchestrator.ts";
 import type { Runner } from "../../infrastructure/runners/runner.ts";
 
-test("ReviewOrchestrator uses runner.run for external implementation review", async () => {
+test("`ReviewOrchestrator` は implementation の external review で `runner.run` を使う", async () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-review-"));
   const targetFile = join(workspace, "target.ts");
   const specFile = join(workspace, "spec.md");
@@ -58,7 +58,7 @@ test("ReviewOrchestrator uses runner.run for external implementation review", as
   assert.match(prompt, /# spec/);
 });
 
-test("ReviewOrchestrator skips external test review when skipExternalReview is set", async () => {
+test("`ReviewOrchestrator` は `skipExternalReview` 指定時に test の external review を skip する", async () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-test-review-"));
   const targetFile = join(workspace, "target.test.ts");
   const specFile = join(workspace, "spec.md");
@@ -113,7 +113,7 @@ test("ReviewOrchestrator skips external test review when skipExternalReview is s
   assert.equal(reviewCalls, 0);
 });
 
-test("ReviewOrchestrator includes spec content in implementation criteria review", async () => {
+test("`ReviewOrchestrator` は implementation criteria review に spec 本文を含める", async () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-review-criteria-spec-"));
   const targetFile = join(workspace, "target.ts");
   const specFile = join(workspace, "spec.md");
@@ -163,7 +163,7 @@ test("ReviewOrchestrator includes spec content in implementation criteria review
   assert.match(appendSystemPrompt, /# criteria/);
 });
 
-test("parseReviewResult fails closed when checklist is missing", () => {
+test("`parseReviewResult` は checklist 欠落時に fail-closed で扱う", () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-review-parse-"));
   const logger = new HarnessLogger("review-parse-test", { baseDir: workspace });
   const orchestrator = new ReviewOrchestrator(logger, {} as never, workspace, {} as never);

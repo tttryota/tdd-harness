@@ -7,6 +7,8 @@ export function loadTemplate(
   projectRoot: string,
   configOverrides?: Record<string, string | null>,
 ): string {
+  // project が明示 override したものを最優先にし、次に project-local 慣例パス、
+  // 最後に同梱デフォルトへ落とす。これで bundled 更新より project 意図を優先できる。
   // 1. config 指定パス
   const overridePath = configOverrides?.[name];
   if (overridePath) {

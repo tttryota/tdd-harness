@@ -82,6 +82,7 @@ export class FsProjectBoundary implements ProjectBoundary {
   }
 
   assertWithinProject(fullPath: string): void {
+    // 非存在パスも「最近傍の既存祖先」で実体化して判定し、symlink 経由の外出しを防ぐ。
     const realPath = existsSync(fullPath)
       ? realpathSync(fullPath)
       : this.realpathNearestAncestor(fullPath);
@@ -132,6 +133,7 @@ export class FsProjectBoundary implements ProjectBoundary {
     if (!existsSync(specFullPath)) throw new GuardError(`仕様書が存在しません: ${plan.specPath}`);
     if (!existsSync(testCasesFullPath)) throw new GuardError(`テストケースが存在しません: ${plan.testCasesPath}`);
 
+    // draft の spec / test_cases で `impl` を走らせると、review が契約不整合に引っ張られる。
     const specFm = this.readFrontmatter(specFullPath);
     if (!this.isReadyLikeStatus(specFm.status)) {
       throw new GuardError(`仕様書が ready ではありません（現在: ${specFm.status ?? "なし"}）`);

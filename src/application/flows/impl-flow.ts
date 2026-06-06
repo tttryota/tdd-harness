@@ -89,6 +89,10 @@ type ImplGenerationResult = {
   notes: string[];
 };
 
+/**
+ * test generation は structured output で `decision` を返す。
+ * fail-closed にするため、配列 shape が少しでも崩れていたら即座に reject する。
+ */
 function stringArrayField(value: unknown, fieldName: string): string[] {
   if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
     throw new HarnessError(`テスト生成結果の ${fieldName} が不正です。`);
@@ -123,6 +127,10 @@ export function parseTestGenerationResult(raw: string): TestGenerationResult {
   };
 }
 
+/**
+ * `impl_generate` も structured output を前提にする。
+ * GREEN 失敗中に `noop` を許すと進行不能になるため、上位で明示的に guard する。
+ */
 export function parseImplGenerationResult(raw: string): ImplGenerationResult {
   let parsed: unknown;
   try {
@@ -150,6 +158,10 @@ export function parseImplGenerationResult(raw: string): ImplGenerationResult {
   };
 }
 
+/**
+ * `impl` は plan を入力契約にして、RED -> implementation -> GREEN -> review の順を強制する。
+ * resume と review checkpoint もここで管理するため、進行順を変えずに helper へ責務分離している。
+ */
 export class ImplFlow {
   private boundary: ProjectBoundary;
   private registry: RunnerRegistry;
@@ -182,12 +194,25 @@ export class ImplFlow {
     return STEP_ORDER.indexOf(completedStep) >= STEP_ORDER.indexOf(target);
   }
 
+  private async finishAlreadyGreenRun(
+    reviewOrchestrator: ReviewOrchestrator,
+    plan: ValidatedImplPlan,
+    criteriaPaths: string[],
+    testPath: string,
+    logger: Logger,
+  ): Promise<void> {
+    await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
+    this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: 0, alreadyGreen: true });
+    logger.clearCheckpoint();
+    console.log("完了しました。");
+  }
+
   async run(planPath: string, options?: { resume?: boolean; plan?: import("../../domain/model/types.ts").TaskPlan }): Promise<void> {
     const rawPlan = options?.plan ?? parsePlan(this.boundary.getProjectRoot(), planPath);
     const plan = buildValidatedImplPlan(this.boundary, rawPlan);
     const root = this.boundary.getProjectRoot();
-    // codexAvailable: ImplFlow の迷走対処に寄与する step で codex が使えるか
-    // impl フローで実際に使う step のうち、外部レビュー系のみを判定対象とする
+    // codexAvailable は drift escalation の Level 2 可否にだけ使う。
+    // 実装主経路の runner 可否ではなく、迷走時に別視点を追加できるかを見る。
     const implFlowSteps: import("../../domain/model/steps.ts").FlowStep[] = [
       FLOW_STEP.TEST_EXTERNAL_REVIEW,
       FLOW_STEP.IMPL_EXTERNAL_REVIEW,
@@ -212,7 +237,7 @@ export class ImplFlow {
       codexAvailable: hasCodex,
     });
 
-    // チェックポイント復元
+    // checkpoint は completed step ごとに保存し、同じ step を再実行しないために使う。
     const checkpoint = options?.resume ? logger.loadCheckpoint() : null;
     const resumeFrom = checkpoint?.completedStep ?? null;
     let sessionId = checkpoint?.sessionId ?? "";
@@ -258,7 +283,8 @@ export class ImplFlow {
 
     logger.log(EVENT.TDD_START, { testCases: plan.targetTestCases });
 
-    // テストコード一括生成
+    // test_generate が `contract_revision_required` を返した場合は、その時点で停止する。
+    // テストを無理に書き換え続けるより、入力契約を人間が見直す方が安全。
     if (!this.shouldSkip(resumeFrom, "test_generated")) {
       console.log("テストコードを生成中...");
       const runner = this.registry.getRunner(FLOW_STEP.TEST_GENERATE);
@@ -339,18 +365,15 @@ export class ImplFlow {
 
     // RED 確認
     let redFailureOutput = "";
-    // resume で red_confirmed をスキップする場合、初回実装プロンプト用に RED 出力を復元
+    // red_confirmed 済み resume では、初回 implementation prompt 用に RED 出力だけ復元する。
     if (this.shouldSkip(resumeFrom, "red_confirmed") && !this.shouldSkip(resumeFrom, "green_confirmed")) {
       const rerunResult = await this.runTests(testPath, { allowCollectionError: true });
       if (rerunResult.passed) {
-        // resume 時にテストが既に GREEN → 通常経路と同じくレビューのみ実行
+        // resume 中に既に GREEN なら、implementation をやり直さず review だけ実行する。
         console.log("警告: テストが既にパスしています。実装生成をスキップしてレビューに進みます。");
         logger.log(EVENT.TEST_RUN, { result: "ALREADY_GREEN", output: rerunResult.output });
         alreadyGreen = true;
-        await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
-        this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: 0, alreadyGreen: true });
-        logger.clearCheckpoint();
-        console.log("完了しました。");
+        await this.finishAlreadyGreenRun(reviewOrchestrator, plan, criteriaPaths, testPath, logger);
         return;
       }
       redFailureOutput = rerunResult.output;
@@ -364,10 +387,7 @@ export class ImplFlow {
         console.log("警告: テストが既にパスしています。実装生成をスキップしてレビューに進みます。");
         logger.log(EVENT.TEST_RUN, { result: "ALREADY_GREEN", output: redResult.output });
         alreadyGreen = true;
-        await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
-        this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: 0, alreadyGreen: true });
-        logger.clearCheckpoint();
-        console.log("完了しました。");
+        await this.finishAlreadyGreenRun(reviewOrchestrator, plan, criteriaPaths, testPath, logger);
         return;
       }
 
@@ -489,7 +509,7 @@ export class ImplFlow {
       // 次の試行のために最新の失敗出力を保持
       lastFailureOutput = greenResult.output;
 
-      // DriftGuard に失敗を記録
+      // 同じ失敗を惰性的に繰り返さないため、GREEN 失敗は drift として記録する。
       const level = driftGuard.recordTestAttempt(plan.scope, false, greenResult.output);
       if (level !== null) {
         logger.log(EVENT.DRIFT_DETECTED, { metric: "green_failure", escalation: level, attempt });
@@ -786,7 +806,7 @@ ${issueList}
     testPath: string,
     options?: { allowCollectionError?: boolean },
   ): Promise<{ passed: boolean; output: string }> {
-    // testPath は repo-relative。toolRoot が root 以外の場合に備え絶対パスに変換
+    // test tool の cwd を `toolRoot` へ寄せても、対象パス解決だけはブレさせない。
     const absTestPath = resolve(this.boundary.getProjectRoot(), testPath);
     const args = this.testAdapter.buildArgs(absTestPath);
     const launcherOptions: LauncherOptions = {

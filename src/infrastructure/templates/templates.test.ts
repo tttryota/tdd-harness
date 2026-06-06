@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { HarnessError } from "../../domain/model/types.ts";
 import { loadTemplate, renderTemplate } from "./templates.ts";
 
-test("loadTemplate prefers config overrides over project conventions", () => {
+test("`loadTemplate` は config override を project convention より優先する", () => {
   const root = mkdtempSync(join(tmpdir(), "harness-template-"));
   mkdirSync(join(root, ".harness", "resources", "templates"), { recursive: true });
   writeFileSync(join(root, ".harness", "resources", "templates", "review.md"), "project", "utf-8");
@@ -16,7 +16,7 @@ test("loadTemplate prefers config overrides over project conventions", () => {
   assert.equal(loadTemplate("review", root, {}), "project");
 });
 
-test("loadTemplate falls back to bundled templates and throws for missing names", () => {
+test("`loadTemplate` は bundled template へフォールバックし、未知名は例外にする", () => {
   const root = mkdtempSync(join(tmpdir(), "harness-template-builtin-"));
   assert.match(loadTemplate("review-response-format", root), /checklist/i);
   const specTemplate = loadTemplate("spec-template", root);
@@ -101,7 +101,7 @@ test("loadTemplate falls back to bundled templates and throws for missing names"
   assert.throws(() => loadTemplate("missing-template", root), HarnessError);
 });
 
-test("renderTemplate replaces known variables and blanks unknown placeholders", () => {
+test("`renderTemplate` は既知変数を置換し未知 placeholder は空文字にする", () => {
   assert.equal(
     renderTemplate("Hello {{name}} from {{city}} / {{missing}}", { name: "Codex", city: "Tokyo" }),
     "Hello Codex from Tokyo / ",

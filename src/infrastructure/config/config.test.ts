@@ -62,7 +62,7 @@ function replaceRunners(body: string, runnersBlock: string): string {
   return body.replace(/runners:\n[\s\S]*$/, runnersBlock);
 }
 
-test("loadConfig resolves profile-centric runner mapping and context", () => {
+test("`loadConfig` は profile 中心の runner mapping と context を解決する", () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-config-"));
   writeConfig(workspace, baseYaml());
 
@@ -91,7 +91,7 @@ test("loadConfig resolves profile-centric runner mapping and context", () => {
   );
 });
 
-test("loadConfig rejects missing profile step assignments", () => {
+test("`loadConfig` は profile の step 割当不足を拒否する", () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-config-missing-step-"));
   writeConfig(
     workspace,
@@ -106,7 +106,7 @@ test("loadConfig rejects missing profile step assignments", () => {
   );
 });
 
-test("loadConfig rejects legacy top-level runner fields", () => {
+test("`loadConfig` は legacy な top-level runner field を拒否する", () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-config-legacy-top-"));
   writeConfig(
     workspace,
@@ -121,7 +121,7 @@ test("loadConfig rejects legacy top-level runner fields", () => {
   );
 });
 
-test("loadConfig rejects legacy profile.claude config", () => {
+test("`loadConfig` は legacy な `profile.claude` 設定を拒否する", () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-config-legacy-profile-"));
   writeConfig(
     workspace,
@@ -167,7 +167,7 @@ runners:
   );
 });
 
-test("loadConfig reads .harness/config/harness.yml and preserves template overrides", () => {
+test("`loadConfig` は `.harness/config/harness.yml` を読み template override を保持する", () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-config-path-"));
   writeConfig(workspace, `${baseYaml()}templates:\n  review-response-format: custom.md\n`);
 
@@ -177,7 +177,7 @@ test("loadConfig reads .harness/config/harness.yml and preserves template overri
   assert.equal(config.profiles.backend.toolRoot, join(workspace, "backend"));
 });
 
-test("loadConfig rejects invalid top-level config shapes", () => {
+test("`loadConfig` は不正な top-level config shape を拒否する", () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-config-shapes-"));
   writeConfig(workspace, "profiles: []\n");
   assert.throws(() => loadConfig(workspace), /profiles はオブジェクト形式/);
@@ -189,7 +189,7 @@ test("loadConfig rejects invalid top-level config shapes", () => {
   assert.throws(() => loadConfig(workspace), /runners はオブジェクト形式/);
 });
 
-test("loadConfig rejects invalid profile field shapes", () => {
+test("`loadConfig` は不正な profile field shape を拒否する", () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-config-profile-shape-"));
   const cases = [
     {
@@ -260,7 +260,7 @@ test("loadConfig rejects invalid profile field shapes", () => {
   }
 });
 
-test("loadConfig rejects invalid context and runner definitions", () => {
+test("`loadConfig` は不正な context と runner 定義を拒否する", () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-config-context-runner-"));
   const cases = [
     {
@@ -311,7 +311,7 @@ test("loadConfig rejects invalid context and runner definitions", () => {
   }
 });
 
-test("loadConfig rejects runtime mismatches and invalid path templates", () => {
+test("`loadConfig` は runtime 不一致と不正な path template を拒否する", () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-config-runtime-"));
   writeConfig(workspace, baseYaml().replace("    lint: [ruff, mypy]", "    lint: [ruff, eslint]"));
   assert.throws(() => loadConfig(workspace), /異なる runtime の lint ツールを混在/);
@@ -418,7 +418,7 @@ runners:
   assert.throws(() => loadConfig(workspace), /"\.\." を含むパスは指定できません/);
 });
 
-test("loadConfig infers defaults, profile resolution, and missing profile guidance", () => {
+test("`loadConfig` は default 推論・profile 解決・profile 未定義時の案内を行う", () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-config-defaults-"));
   writeConfig(
     workspace,
@@ -474,7 +474,7 @@ runners:
   assert.throws(() => resolveProfile(config, "missing"), /profile "missing" が見つかりません/);
 });
 
-test("inferProfile requires an explicit frontmatter profile when multiple profiles exist", () => {
+test("`inferProfile` は profile が複数あると明示 frontmatter を要求する", () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-config-multi-"));
   writeConfig(
     workspace,
@@ -558,7 +558,7 @@ runners:
   assert.throws(() => inferProfile(config), /複数の profile があります/);
 });
 
-test("loadConfig preserves explicit designLayout overrides", () => {
+test("`loadConfig` は明示した `designLayout` override を保持する", () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-config-design-layout-"));
   writeConfig(
     workspace,
@@ -576,7 +576,7 @@ test("loadConfig preserves explicit designLayout overrides", () => {
   });
 });
 
-test("loadConfig preserves explicit lint args overrides", () => {
+test("`loadConfig` は明示した lint args override を保持する", () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-config-lint-args-"));
   writeConfig(
     workspace,

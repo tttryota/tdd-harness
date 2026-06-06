@@ -35,7 +35,7 @@ export class LintGuard {
   ): Promise<void> {
     let currentFiles = targetFiles;
     for (let attempt = 1; attempt <= MAX_LINT_RETRIES; attempt++) {
-      // claudeFix 後にファイルが追加/リネームされた可能性があるため再スキャン
+      // apply_fixes や lint_fix 後に対象ファイルが増減するため、毎回 scope を再解決する。
       if (attempt > 1 && options?.rescanFiles) {
         currentFiles = await options.rescanFiles();
       }

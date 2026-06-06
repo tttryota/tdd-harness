@@ -40,7 +40,7 @@ function fakeTestAdapter() {
   } as any;
 }
 
-test("ImplFlow runs through RED to GREEN and generates a report", async () => {
+test("`ImplFlow` は RED から GREEN を通過してレポートを生成する", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-impl-flow-"));
   mkdirSync(join(root, "backend", "ingestion", "tests"), { recursive: true });
   mkdirSync(join(root, "docs", "spec", "ingestion"), { recursive: true });
@@ -149,7 +149,7 @@ test("ImplFlow runs through RED to GREEN and generates a report", async () => {
   assert.equal(reviewData.tdd.alreadyGreen, false);
 });
 
-test("ImplFlow diff_scope ignores large test diffs when implementation diff is small", async () => {
+test("`ImplFlow` の `diff_scope` は implementation diff が小さい場合に大きな test diff を無視する", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-impl-flow-diff-scope-"));
   mkdirSync(join(root, "backend", "ingestion", "tests"), { recursive: true });
   mkdirSync(join(root, "docs", "spec", "ingestion"), { recursive: true });

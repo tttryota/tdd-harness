@@ -143,6 +143,11 @@ type PageReviewParams = ReviewParams & {
   browserScenariosText: string;
 };
 
+/**
+ * review の段数と retry を一箇所に閉じ込める。
+ * test は 2 段、implementation は 3 段、design は 1 段 review を基本にし、
+ * minor 判定、dual fallback、parse failure escalation もここで扱う。
+ */
 export class ReviewOrchestrator {
   private logger: Logger;
   private lintGuard: LintGuard;
@@ -174,7 +179,7 @@ export class ReviewOrchestrator {
   }
 
   async runReview(params: ReviewParams): Promise<ReviewResult[]> {
-    // テストレビューは records をリセット、実装レビューは追記
+    // test review は implementation review の前段なので、ここで前回記録を捨てる。
     if (params.reviewMode === "test") {
       this.records = [];
     }
@@ -471,7 +476,8 @@ export class ReviewOrchestrator {
         issues: reviewB.issues.length,
       });
 
-      // パース失敗チェック（両エージェント）
+      // dual fallback は「多角化」であって自動修復ではない。
+      // 2 体とも parse failure を起こすなら、人間が止めるべき状態として扱う。
       const combinedIssues = [...reviewA.issues, ...reviewB.issues];
       if (hasParseFailure(combinedIssues)) {
         this.records.push({
@@ -863,7 +869,7 @@ export class ReviewOrchestrator {
         return result;
       }
 
-      // パース失敗等の擬似 issue は自動修正せずエスカレーション
+      // parse failure は指摘ではなく review 自体の故障なので、自動修正には回さない。
       if (hasParseFailure(result.issues)) {
         this.logReviewResultSummary(result.reviewer, cycle + 1, result.issues, "escalated");
         this.records.push({
@@ -885,7 +891,7 @@ export class ReviewOrchestrator {
       minorOnlyCycles = nextMinorOnlyCycles(minorOnlyCycles, result.issues);
       if (!hasCriticalOrMajorIssues(result.issues)) {
         if (shouldJudgeMinorAcceptance(minorOnlyCycles)) {
-          // 第三者 Claude に許容可否を判断させる
+          // minor だけでループし続けるのを防ぐため、2 サイクル続いたら許容可否を別判定する。
           const verdict = await this.judgeMinorAcceptance(
             result.issues, diffBefore, params.specPath,
           );

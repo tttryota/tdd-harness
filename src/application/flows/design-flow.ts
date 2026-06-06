@@ -18,6 +18,10 @@ const DEFAULT_SOURCE_DIR_TEMPLATE = "backend/{{category}}";
 const DEFAULT_SOURCE_TEST_DIR_TEMPLATE = "backend/{{category}}/tests";
 const DEFAULT_SCOPE_PATTERN_TEMPLATE = "backend/{{category}}/*";
 
+/**
+ * `design` は backend 実装の前提となる spec / test_cases を整える。
+ * plan 作成や実装着手は行わず、人間が `status: ready` を付けられるところまでで止まる。
+ */
 export class DesignFlow {
   private boundary: ProjectBoundary;
   private registry: RunnerRegistry;
@@ -86,6 +90,8 @@ export class DesignFlow {
       console.log(`仕様書を生成しました: ${specPath}`);
     }
 
+    // spec が draft でも test_cases 生成までは進める。
+    // ここで止めると、spec と test_cases の整合レビューに必要な材料が揃わない。
     const specReadyAfterLoad = isReadyLikeStatus(this.boundary.readFrontmatter(specPath).status);
     if (!specReadyAfterLoad) {
       await this.runSpecReview(specPath, specAllowedTools, logger, specReviewContext, requirements);
@@ -245,6 +251,28 @@ ${template}
     );
   }
 
+  private createDesignReviewOrchestrator(logger: Logger): ReviewOrchestrator {
+    const lintGuard = { async check() {} } as any;
+    return new ReviewOrchestrator(
+      logger,
+      lintGuard,
+      this.boundary.getProjectRoot(),
+      this.registry,
+      this.profile,
+    );
+  }
+
+  private wrapDesignReviewError(reviewStep: "spec_review" | "spec_tc_review", error: unknown): never {
+    if (error instanceof DriftError) {
+      throw new DriftError(
+        error.level,
+        error.metric,
+        `${reviewStep} が失敗しました: ${error.message}`,
+      );
+    }
+    throw error;
+  }
+
   private async runSpecTcReview(
     specPath: string,
     testCasesPath: string,
@@ -252,14 +280,7 @@ ${template}
     logger: Logger,
     designRequirements: string,
   ): Promise<void> {
-    const lintGuard = { async check() {} } as any;
-    const orchestrator = new ReviewOrchestrator(
-      logger,
-      lintGuard,
-      this.boundary.getProjectRoot(),
-      this.registry,
-      this.profile,
-    );
+    const orchestrator = this.createDesignReviewOrchestrator(logger);
 
     try {
       await orchestrator.runSpecTcReview({
@@ -272,14 +293,7 @@ ${template}
         designRequirements,
       });
     } catch (error: unknown) {
-      if (error instanceof DriftError) {
-        throw new DriftError(
-          error.level,
-          error.metric,
-          `spec_tc_review が失敗しました: ${error.message}`,
-        );
-      }
-      throw error;
+      this.wrapDesignReviewError("spec_tc_review", error);
     }
   }
 
@@ -290,14 +304,7 @@ ${template}
     designContextText: string,
     designRequirements: string,
   ): Promise<void> {
-    const lintGuard = { async check() {} } as any;
-    const orchestrator = new ReviewOrchestrator(
-      logger,
-      lintGuard,
-      this.boundary.getProjectRoot(),
-      this.registry,
-      this.profile,
-    );
+    const orchestrator = this.createDesignReviewOrchestrator(logger);
 
     try {
       await orchestrator.runSpecReview({
@@ -310,14 +317,7 @@ ${template}
         designRequirements,
       });
     } catch (error: unknown) {
-      if (error instanceof DriftError) {
-        throw new DriftError(
-          error.level,
-          error.metric,
-          `spec_review が失敗しました: ${error.message}`,
-        );
-      }
-      throw error;
+      this.wrapDesignReviewError("spec_review", error);
     }
   }
 }

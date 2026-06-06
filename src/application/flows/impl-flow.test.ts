@@ -12,7 +12,7 @@ import { buildValidatedImplPlan } from "../plan/validated-plan.ts";
 import { resolveCriteriaPaths } from "../resolvers/criteria-resolver.ts";
 import { buildMswInstructions, resolveRuleName, resolveRulesContent } from "../resolvers/rules-resolver.ts";
 
-test("parseTestGenerationResult accepts noop result", () => {
+test("`parseTestGenerationResult` は `noop` の結果を受け入れる", () => {
   const result = parseTestGenerationResult(JSON.stringify({
     decision: "noop",
     why: ["covered by existing tests"],
@@ -25,7 +25,7 @@ test("parseTestGenerationResult accepts noop result", () => {
   assert.deepEqual(result.coveredTestCases, ["case 1", "case 2"]);
 });
 
-test("parseTestGenerationResult accepts updated result", () => {
+test("`parseTestGenerationResult` は `updated` の結果を受け入れる", () => {
   const result = parseTestGenerationResult(JSON.stringify({
     decision: "updated",
     why: ["case 3 was missing"],
@@ -38,7 +38,7 @@ test("parseTestGenerationResult accepts updated result", () => {
   assert.deepEqual(result.updatedTestCases, ["case 3"]);
 });
 
-test("parseTestGenerationResult accepts contract revision result", () => {
+test("`parseTestGenerationResult` は `contract_revision_required` の結果を受け入れる", () => {
   const result = parseTestGenerationResult(JSON.stringify({
     decision: "contract_revision_required",
     why: ["dependency protocol signature is underdetermined"],
@@ -51,7 +51,7 @@ test("parseTestGenerationResult accepts contract revision result", () => {
   assert.deepEqual(result.notes, ["DiffDetector.detect(target_path, snapshot_store) signature is not defined"]);
 });
 
-test("parseImplGenerationResult accepts noop result", () => {
+test("`parseImplGenerationResult` は `noop` の結果を受け入れる", () => {
   const result = parseImplGenerationResult(JSON.stringify({
     decision: "noop",
     why: ["existing implementation already satisfies spec and tests"],
@@ -64,7 +64,7 @@ test("parseImplGenerationResult accepts noop result", () => {
   assert.deepEqual(result.coveredRequirements, ["requirement 1", "requirement 2"]);
 });
 
-test("parseImplGenerationResult accepts updated result", () => {
+test("`parseImplGenerationResult` は `updated` の結果を受け入れる", () => {
   const result = parseImplGenerationResult(JSON.stringify({
     decision: "updated",
     why: ["implemented missing boundary handling"],
@@ -77,7 +77,7 @@ test("parseImplGenerationResult accepts updated result", () => {
   assert.deepEqual(result.updatedRequirements, ["requirement 3"]);
 });
 
-test("impl generation result parsers fail closed on malformed payloads", () => {
+test("実装生成結果の parser は不正 payload を fail-closed で拒否する", () => {
   assert.throws(() => parseTestGenerationResult("not-json"), HarnessError);
   assert.throws(
     () => parseTestGenerationResult(JSON.stringify({ decision: "bad", why: [], covered_test_cases: [], updated_test_cases: [], notes: [] })),
@@ -89,7 +89,7 @@ test("impl generation result parsers fail closed on malformed payloads", () => {
   );
 });
 
-test("ImplFlow helper methods resolve criteria, rules, and MSW instructions", () => {
+test("`ImplFlow` が使う helper 群は criteria・rules・MSW 指示を正しく解決する", () => {
   const root = mkdtempSync(join(tmpdir(), "harness-impl-helpers-"));
   mkdirSync(join(root, ".harness", "resources", "criteria"), { recursive: true });
   mkdirSync(join(root, ".harness", "resources", "rules"), { recursive: true });
@@ -151,7 +151,7 @@ test("ImplFlow helper methods resolve criteria, rules, and MSW instructions", ()
   assert.equal(buildMswInstructions(false, "impl"), "");
 });
 
-test("ImplFlow resolveCriteriaPaths rejects missing explicit criteria files", () => {
+test("`ImplFlow` の criteria 解決は存在しない明示 criteria を拒否する", () => {
   const root = mkdtempSync(join(tmpdir(), "harness-impl-criteria-missing-"));
   const profile = {
     reviewCriteria: ["missing.md"],
@@ -172,7 +172,7 @@ test("ImplFlow resolveCriteriaPaths rejects missing explicit criteria files", ()
   }), GuardError);
 });
 
-test("ImplFlow reviews only changed test and implementation files", async () => {
+test("`ImplFlow` は変更された test ファイルと implementation ファイルだけを review する", async () => {
   const changedTestFile = "/tmp/test_file_diff_detector.py";
   const changedImplFile = "/tmp/file_diff_detector.py";
   const calls: any[] = [];
@@ -208,7 +208,7 @@ test("ImplFlow reviews only changed test and implementation files", async () => 
   assert.deepEqual(await calls[1].rescanFiles(), [changedImplFile]);
 });
 
-test("ImplFlow resume skips completed implementation review phases", async () => {
+test("`ImplFlow` の resume は完了済み implementation review フェーズを skip する", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-impl-resume-"));
   mkdirSync(join(root, ".harness", "resources", "criteria"), { recursive: true });
   writeFileSync(join(root, ".harness", "resources", "criteria", "review-criteria-common.md"), "# common\n", "utf-8");
@@ -322,7 +322,7 @@ test("ImplFlow resume skips completed implementation review phases", async () =>
   assert.deepEqual(savedSteps, ["impl_review_quality_passed", "impl_reviewed"]);
 });
 
-test("ImplFlow stops when test generation requires contract revision", async () => {
+test("`ImplFlow` は test generation が `contract_revision_required` を返したら停止する", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-impl-contract-revision-"));
   mkdirSync(join(root, "docs", "spec"), { recursive: true });
   mkdirSync(join(root, "tests", "test-cases"), { recursive: true });

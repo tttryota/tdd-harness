@@ -15,7 +15,7 @@ function initGitRepo(root: string): void {
   execFileSync("git", ["commit", "-m", "init"], { cwd: root });
 }
 
-test("Boundary finds misplaced test files outside configured testDir", async () => {
+test("`Boundary` は設定した `testDir` の外にある test ファイルを検出する", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-boundary-"));
   mkdirSync(join(root, "backend/benchmark/tests"), { recursive: true });
   writeFileSync(join(root, "backend/benchmark/tests/test_expected.py"), "def test_ok():\n    pass\n");
@@ -40,7 +40,7 @@ test("Boundary finds misplaced test files outside configured testDir", async () 
   );
 });
 
-test("Boundary validates scope and path segments", () => {
+test("`Boundary` は scope と path segment を検証する", () => {
   const root = mkdtempSync(join(tmpdir(), "harness-boundary-validate-"));
   const boundary = new Boundary(root);
 
@@ -51,7 +51,7 @@ test("Boundary validates scope and path segments", () => {
   assert.throws(() => boundary.extractName("bad/na)me"), GuardError);
 });
 
-test("Boundary discovers source and test files and builds allowed tools", async () => {
+test("`Boundary` は source / test ファイルを列挙し allowed tools を組み立てる", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-boundary-files-"));
   mkdirSync(join(root, "frontend", "src", "quiz", "result", "__tests__"), { recursive: true });
   writeFileSync(join(root, "frontend", "src", "quiz", "result", "ResultPage.tsx"), "export const x = 1;\n", "utf-8");
@@ -81,7 +81,7 @@ test("Boundary discovers source and test files and builds allowed tools", async 
   assert.match(boundary.implAllowedTools("quiz/result")[1] ?? "", /frontend\/src\/quiz\/result\/\*\*\/\*\.\{ts,tsx\}/);
 });
 
-test("Boundary discovers source files when sourceDir and testDir are separate trees", async () => {
+test("`Boundary` は `sourceDir` と `testDir` が分かれた構成でも source を列挙できる", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-boundary-split-layout-"));
   mkdirSync(join(root, "frontend", "src", "quiz", "result"), { recursive: true });
   mkdirSync(join(root, "frontend", "tests", "quiz", "result"), { recursive: true });
@@ -104,7 +104,7 @@ test("Boundary discovers source files when sourceDir and testDir are separate tr
   await boundary.verifyChangedFilesWithinScope("quiz/result");
 });
 
-test("Boundary separates colocated implementation and test files", async () => {
+test("`Boundary` は colocated な implementation と test ファイルを分離する", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-boundary-colocated-"));
   mkdirSync(join(root, "backend", "core", "ingestion", "infrastructure"), { recursive: true });
   const implFile = join(root, "backend", "core", "ingestion", "infrastructure", "file_diff_detector.py");
@@ -140,7 +140,7 @@ test("Boundary separates colocated implementation and test files", async () => {
   assert.ok(!testTools.includes("Write(backend/core/ingestion/infrastructure/**)"));
 });
 
-test("Boundary stages and verifies changed files within scope", async () => {
+test("`Boundary` は scope 内の変更ファイルを stage し検証する", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-boundary-git-"));
   mkdirSync(join(root, "backend", "ingestion", "tests"), { recursive: true });
   writeFileSync(join(root, "backend", "ingestion", "mod.py"), "value = 1\n", "utf-8");
@@ -166,7 +166,7 @@ test("Boundary stages and verifies changed files within scope", async () => {
   );
 });
 
-test("Boundary ignores unchanged pre-existing out-of-scope files but still detects new drift", async () => {
+test("`Boundary` は未変更の scope 外ファイルを無視しつつ新しい drift は検出する", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-boundary-baseline-"));
   mkdirSync(join(root, "backend", "ingestion", "tests"), { recursive: true });
   mkdirSync(join(root, "plan"), { recursive: true });
@@ -187,7 +187,7 @@ test("Boundary ignores unchanged pre-existing out-of-scope files but still detec
   );
 });
 
-test("Boundary rejects project-external symlinks", async () => {
+test("`Boundary` は project 外を指す symlink を拒否する", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-boundary-symlink-"));
   mkdirSync(join(root, "frontend", "src", "quiz"), { recursive: true });
   const outside = mkdtempSync(join(tmpdir(), "harness-boundary-outside-"));
@@ -205,7 +205,7 @@ test("Boundary rejects project-external symlinks", async () => {
   );
 });
 
-test("Boundary implementationGuard and additional tool scopes enforce review contracts", async () => {
+test("`Boundary` の `implementationGuard` と追加 tool scope は review 契約を強制する", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-boundary-guard-"));
   mkdirSync(join(root, "backend", "quiz", "tests"), { recursive: true });
   mkdirSync(join(root, ".harness", "reviews"), { recursive: true });
@@ -248,7 +248,7 @@ test("Boundary implementationGuard and additional tool scopes enforce review con
   assert.throws(() => boundary.assertWithinProject(join(root, "..", "outside.txt")), GuardError);
 });
 
-test("Boundary covers missing-plan fields, empty directories, and non-git fallbacks", async () => {
+test("`Boundary` は plan の必須欠落・空ディレクトリ・非 git fallback を扱う", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-boundary-extra-"));
   mkdirSync(join(root, "backend", "quiz"), { recursive: true });
   const boundary = new Boundary(root);
@@ -274,7 +274,7 @@ test("Boundary covers missing-plan fields, empty directories, and non-git fallba
   }
 });
 
-test("Boundary implementationGuard rejects draft spec and test case statuses", () => {
+test("`Boundary` の `implementationGuard` は draft の spec / test_cases を拒否する", () => {
   const root = mkdtempSync(join(tmpdir(), "harness-boundary-draft-status-"));
   writeFileSync(join(root, "spec.md"), "---\nstatus: draft\n---\n# spec\n", "utf-8");
   writeFileSync(join(root, "cases.md"), "---\nstatus: draft\n---\n# cases\n", "utf-8");

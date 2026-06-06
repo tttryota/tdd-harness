@@ -81,6 +81,7 @@ export class DriftGuard {
   }
 
   checkDiffScope(diffLines: number): void {
+    // 実装差分が想定スコープから大きく外れたら、テストが通っていても fail-closed で止める。
     const limit = this.state.expectedScopeLines * SCOPE_DIFF_MULTIPLIER;
     if (diffLines > limit) {
       this.handleDrift("diff_scope", diffLines);

@@ -15,7 +15,7 @@ function createGuard(options?: { codexAvailable?: boolean }): DriftGuard {
   return guard;
 }
 
-test("DriftGuard escalates repeated test failures across levels", () => {
+test("`DriftGuard` は繰り返しの test failure を段階的に escalate する", () => {
   const guard = createGuard({ codexAvailable: true });
 
   assert.equal(guard.recordTestAttempt("suite", false, "same"), null);
@@ -26,7 +26,7 @@ test("DriftGuard escalates repeated test failures across levels", () => {
   assert.equal(level2, ESCALATION_LEVEL.LEVEL_2);
 });
 
-test("DriftGuard throws level 3 when codex is unavailable and failures continue", () => {
+test("`DriftGuard` は codex 不可のまま failure が続くと level 3 を投げる", () => {
   const guard = createGuard({ codexAvailable: false });
   guard.handleDrift("test_retry", 2);
 
@@ -39,7 +39,7 @@ test("DriftGuard throws level 3 when codex is unavailable and failures continue"
   );
 });
 
-test("DriftGuard detects diff scope and repeated rollbacks", () => {
+test("`DriftGuard` は `diff_scope` と繰り返し rollback を検知する", () => {
   const guard = createGuard();
 
   guard.checkDiffScope(31);
@@ -53,7 +53,7 @@ test("DriftGuard detects diff scope and repeated rollbacks", () => {
   );
 });
 
-test("DriftGuard resets successful test attempts", () => {
+test("`DriftGuard` は成功した test attempt で失敗回数をリセットする", () => {
   const guard = createGuard();
   guard.recordTestAttempt("suite", false, "one");
   guard.recordTestAttempt("suite", true);

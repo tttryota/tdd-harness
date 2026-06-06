@@ -94,7 +94,7 @@ async function captureConsole(run: () => Promise<void>): Promise<string[]> {
   return logs;
 }
 
-test("DesignFlow generates draft spec and test cases, then runs spec_tc_review", async () => {
+test("`DesignFlow` は draft の spec と test_cases を生成し、その後 `spec_tc_review` を実行する", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-design-flow-"));
   const boundary = new Boundary(root);
   const registry = createRegistry(root);
@@ -112,7 +112,7 @@ test("DesignFlow generates draft spec and test cases, then runs spec_tc_review",
   assert.equal(logs.some((line) => line.includes("spec_tc_review が完了しました")), true);
 });
 
-test("DesignFlow respects profile designLayout for output paths and allowed tools", async () => {
+test("`DesignFlow` は profile の `designLayout` に従って出力先と allowed tools を解決する", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-design-flow-layout-"));
   const boundary = new Boundary(root);
   const registry = createRegistry(root);
@@ -140,7 +140,7 @@ test("DesignFlow respects profile designLayout for output paths and allowed tool
   ]);
 });
 
-test("DesignFlow no longer blocks test-case generation on draft spec", async () => {
+test("`DesignFlow` は spec が draft でも test_cases 生成を止めない", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-design-flow-existing-"));
   mkdirSync(join(root, "docs", "spec", "quiz"), { recursive: true });
   writeFileSync(join(root, "docs", "spec", "quiz", "result.md"), "---\nstatus: draft\n---\n", "utf-8");
@@ -160,7 +160,7 @@ test("DesignFlow no longer blocks test-case generation on draft spec", async () 
   );
 });
 
-test("DesignFlow falls back to bundled templates when project templates are absent", async () => {
+test("`DesignFlow` は project template が無い場合に bundled template へフォールバックする", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-design-flow-builtin-template-"));
   const boundary = new Boundary(root);
   const registry = createRegistry(root);
@@ -189,7 +189,7 @@ test("DesignFlow falls back to bundled templates when project templates are abse
   assert.match(registry.requests[3]?.prompt ?? "", /## requirements/);
 });
 
-test("DesignFlow loads project template overrides from .harness/resources/templates", async () => {
+test("`DesignFlow` は `.harness/resources/templates` の project override を読み込む", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-design-flow-project-template-"));
   mkdirSync(join(root, ".harness", "resources", "templates"), { recursive: true });
   writeFileSync(join(root, ".harness", "resources", "templates", "spec-template.md"), "# project spec template\n", "utf-8");
@@ -205,7 +205,7 @@ test("DesignFlow loads project template overrides from .harness/resources/templa
   assert.match(registry.requests[2]?.prompt ?? "", /project test-case template/);
 });
 
-test("DesignFlow passes combined spec and test-case scopes into apply_fixes during spec_tc_review", async () => {
+test("`DesignFlow` は `spec_tc_review` の `apply_fixes` に spec と test_cases の両方の scope を渡す", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-design-flow-fixes-"));
   const boundary = new Boundary(root);
   let applyFixesRequest: { prompt: string; allowedTools?: string[] } | null = null;
@@ -233,7 +233,7 @@ test("DesignFlow passes combined spec and test-case scopes into apply_fixes duri
   ]);
 });
 
-test("DesignFlow passes spec-only scope into apply_fixes during spec_review", async () => {
+test("`DesignFlow` は `spec_review` の `apply_fixes` に spec 専用の scope を渡す", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-design-flow-spec-review-fixes-"));
   const boundary = new Boundary(root);
   let applyFixesRequest: { prompt: string; allowedTools?: string[] } | null = null;
@@ -259,7 +259,7 @@ test("DesignFlow passes spec-only scope into apply_fixes during spec_review", as
   ]);
 });
 
-test("DesignFlow passes requirements into spec reviews and apply_fixes planning", async () => {
+test("`DesignFlow` は requirements を spec review と `apply_fixes` の計画 prompt に渡す", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-design-flow-requirements-"));
   const boundary = new Boundary(root);
   const requirements = "タグフィルタは cross-store join が必要なためスコープ外。topic 解決機能は不要。";
@@ -285,7 +285,7 @@ test("DesignFlow passes requirements into spec reviews and apply_fixes planning"
   assert.match(planPrompt, /除外する修正も有効/);
 });
 
-test("DesignFlow spec_review stops after two non-converging cycles", async () => {
+test("`DesignFlow` の `spec_review` は 2 サイクルで収束しなければ停止する", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-design-flow-spec-review-drift-"));
   const boundary = new Boundary(root);
   const registry = createRegistry(root, {
@@ -303,7 +303,7 @@ test("DesignFlow spec_review stops after two non-converging cycles", async () =>
   );
 });
 
-test("DesignFlow spec_tc_review stops after two non-converging cycles", async () => {
+test("`DesignFlow` の `spec_tc_review` は 2 サイクルで収束しなければ停止する", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-design-flow-drift-"));
   const boundary = new Boundary(root);
   const registry = createRegistry(root, {

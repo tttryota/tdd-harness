@@ -44,7 +44,7 @@ function minor(description: string): ReviewIssue {
   return { file: "target.ts", severity: "minor", description };
 }
 
-test("parseReviewResult accepts fenced JSON and invalid issue shapes fail closed", () => {
+test("`parseReviewResult` は fenced JSON を受け入れ、不正 issue shape を fail-closed で扱う", () => {
   const { orchestrator } = createOrchestrator();
   const parsed = (orchestrator as any).parseReviewResult(
     "reviewer",
@@ -60,7 +60,7 @@ test("parseReviewResult accepts fenced JSON and invalid issue shapes fail closed
   assert.equal(invalid.issues[0]?.severity, "critical");
 });
 
-test("reconcileReviews keeps major issues and only confirmed minor issues", () => {
+test("`reconcileReviews` は major issue と両者が確認した minor issue だけを残す", () => {
   const { orchestrator } = createOrchestrator();
   const issues = orchestrator.reconcileReviews(
     { reviewer: "a", checklist: [], issues: [major("fix me"), minor("same minor"), minor("single")], isLgtm: false },
@@ -72,7 +72,7 @@ test("reconcileReviews keeps major issues and only confirmed minor issues", () =
   assert.equal(issues.some((issue) => issue.description === "single"), false);
 });
 
-test("runPageReview accepts clean pages, escalates parse failures, and can accept repeated minors", async () => {
+test("`runPageReview` は clean page を通し、parse failure を escalate し、繰り返し minor を許容できる", async () => {
   const { orchestrator, specPath } = createOrchestrator();
   const page = orchestrator as any;
   page.pageDesignReview = async () => ({ reviewer: "design", checklist: [], issues: [], isLgtm: true });
@@ -144,7 +144,7 @@ test("runPageReview accepts clean pages, escalates parse failures, and can accep
   assert.equal(records.at(-1)?.reviewer, "page_review");
 });
 
-test("reviewStep fixes major issues and can retry unsafe minor issues", async () => {
+test("`reviewStep` は major issue を修正し、unsafe な minor issue を再試行できる", async () => {
   const { orchestrator, specPath } = createOrchestrator();
   const anyOrchestrator = orchestrator as any;
   const params = {
@@ -193,7 +193,7 @@ test("reviewStep fixes major issues and can retry unsafe minor issues", async ()
   assert.equal(result.isLgtm, true);
 });
 
-test("reviewStep passes major and minor issues together into applyFixes", async () => {
+test("`reviewStep` は major と minor の issue をまとめて `applyFixes` に渡す", async () => {
   const { orchestrator, specPath } = createOrchestrator();
   const anyOrchestrator = orchestrator as any;
   const fixBatches: ReviewIssue[][] = [];
@@ -226,7 +226,7 @@ test("reviewStep passes major and minor issues together into applyFixes", async 
   assert.deepEqual(fixBatches[0]?.map((issue) => issue.description), ["must fix", "[manual] can wait"]);
 });
 
-test("reviewStep sends manual-only minor issues into applyFixes", async () => {
+test("`reviewStep` は manual-only な minor issue も `applyFixes` に渡す", async () => {
   const { orchestrator, specPath } = createOrchestrator();
   const anyOrchestrator = orchestrator as any;
   let fixCalls = 0;
@@ -264,7 +264,7 @@ test("reviewStep sends manual-only minor issues into applyFixes", async () => {
   assert.deepEqual(fixedIssues.map((issue) => issue.description), ["[manual] file-wide constant extraction"]);
 });
 
-test("reviewStep applies fixes for manual major issues", async () => {
+test("`reviewStep` は manual な major issue に対しても修正を適用する", async () => {
   const { orchestrator, specPath } = createOrchestrator();
   const anyOrchestrator = orchestrator as any;
   let fixCalls = 0;
@@ -302,7 +302,7 @@ test("reviewStep applies fixes for manual major issues", async () => {
   assert.deepEqual(fixedIssues.map((issue) => issue.description), ["[manual] changing validation order is required"]);
 });
 
-test("reviewStep logs review_result summaries with findings detail", async () => {
+test("`reviewStep` は findings を含む `review_result` の要約ログを出す", async () => {
   const { orchestrator, specPath, logger } = createOrchestrator();
   const anyOrchestrator = orchestrator as any;
   let calls = 0;
@@ -366,7 +366,7 @@ test("reviewStep logs review_result summaries with findings detail", async () =>
   });
 });
 
-test("runSpecTcReview reuses reviewStep and applyFixes for design drafts", async () => {
+test("`runSpecTcReview` は design draft でも `reviewStep` と `applyFixes` を再利用する", async () => {
   const { orchestrator, specPath } = createOrchestrator();
   const tcPath = join((orchestrator as any).projectRoot, "test-cases.md");
   writeFileSync(tcPath, "# test cases\n", "utf-8");
@@ -394,7 +394,7 @@ test("runSpecTcReview reuses reviewStep and applyFixes for design drafts", async
   assert.equal(fixCalls, 1);
 });
 
-test("runSpecReview reuses reviewStep and applyFixes for draft specs", async () => {
+test("`runSpecReview` は draft spec に対しても `reviewStep` と `applyFixes` を再利用する", async () => {
   const { orchestrator, specPath } = createOrchestrator();
   const anyOrchestrator = orchestrator as any;
   let calls = 0;
@@ -420,7 +420,7 @@ test("runSpecReview reuses reviewStep and applyFixes for draft specs", async () 
   assert.equal(fixCalls, 1);
 });
 
-test("parseFixPlan fails closed when repairs omit an issue", () => {
+test("`parseFixPlan` は repairs が issue を欠落させた場合に fail-closed で扱う", () => {
   const { orchestrator } = createOrchestrator();
 
   assert.throws(
@@ -439,7 +439,7 @@ test("parseFixPlan fails closed when repairs omit an issue", () => {
   );
 });
 
-test("applyFixes reuses lint_fix during post-fix lint retries", async () => {
+test("`applyFixes` は post-fix の lint retry で `lint_fix` を再利用する", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-review-lint-fix-"));
   const specPath = join(root, "spec.md");
   writeFileSync(specPath, "# spec\n", "utf-8");
@@ -521,7 +521,7 @@ test("applyFixes reuses lint_fix during post-fix lint retries", async () => {
   assert.deepEqual(runnerCalls.at(-1)?.allowedTools, ["Write(src/*)"]);
 });
 
-test("applyFixes retries implementation fixes when post-fix tests fail", async () => {
+test("`applyFixes` は post-fix test が失敗したとき implementation 修正を再試行する", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-review-test-retry-"));
   const specPath = join(root, "spec.md");
   writeFileSync(specPath, "# spec\n", "utf-8");
@@ -624,7 +624,7 @@ test("applyFixes retries implementation fixes when post-fix tests fail", async (
   );
 });
 
-test("applyFixes includes design requirements in plan and execute prompts", async () => {
+test("`applyFixes` は design requirements を計画 prompt と実行 prompt に含める", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-review-design-scope-"));
   const specPath = join(root, "spec.md");
   writeFileSync(specPath, "# spec\n", "utf-8");

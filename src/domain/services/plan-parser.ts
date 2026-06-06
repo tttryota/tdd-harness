@@ -12,7 +12,7 @@ import type { BrowserScenario, PlanDependency, PlanType } from "../model/types.t
 export function parsePlan(projectRoot: string, planPath: string): TaskPlan {
   const fullPath = resolve(projectRoot, planPath);
 
-  // プロジェクト境界チェック（Boundary.assertWithinProject 相当）
+  // profile 解決前でも fail-closed を保つため、Boundary 依存前に project root を検証する。
   assertWithinProjectRoot(fullPath, projectRoot);
 
   if (!existsSync(fullPath)) {

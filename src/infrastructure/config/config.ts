@@ -166,6 +166,8 @@ export function loadConfig(projectRoot: string): ResolvedConfig {
     }
   }
 
+  // shape validation は入力 UX より runtime safety を優先する。
+  // 曖昧な補完を避けて、flow 開始前に unsafe な設定を止める。
   validateUserConfigShape(userConfig);
   const migrated = requireProfiles(userConfig);
   const resolved: ResolvedConfig = {

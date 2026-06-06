@@ -14,7 +14,7 @@ function writePlan(root: string, name: string, content: string): string {
   return planPath;
 }
 
-test("parsePlan parses a page plan with yaml sections", () => {
+test("`parsePlan` は YAML section を含む page plan を解釈する", () => {
   const root = mkdtempSync(join(tmpdir(), "harness-plan-"));
   const planPath = writePlan(root, "page.md", `---
 type: page
@@ -71,7 +71,7 @@ result figma
   assert.deepEqual(plan.targetTestCases, ["shows score"]);
 });
 
-test("parsePlan rejects unknown type and invalid boolean", () => {
+test("`parsePlan` は未知の type と不正な boolean を拒否する", () => {
   const root = mkdtempSync(join(tmpdir(), "harness-plan-invalid-"));
   const invalidType = writePlan(root, "invalid-type.md", `---
 type: design
@@ -92,7 +92,7 @@ msw: maybe
     error instanceof GuardError && error.message.includes("真偽値フィールドに不正な値"));
 });
 
-test("parsePlan rejects invalid dependencies and browser scenarios", () => {
+test("`parsePlan` は不正な Dependencies と Browser Scenarios を拒否する", () => {
   const root = mkdtempSync(join(tmpdir(), "harness-plan-sections-"));
   const invalidDeps = writePlan(root, "invalid-deps.md", `---
 type: impl
@@ -129,7 +129,7 @@ msw: false
     error instanceof GuardError && error.message.includes("preconditions は文字列配列"));
 });
 
-test("parsePlan enforces project-root boundary", () => {
+test("`parsePlan` は project root 境界を強制する", () => {
   const root = mkdtempSync(join(tmpdir(), "harness-plan-boundary-"));
   const outside = join(root, "..", "outside.md");
   writeFileSync(outside, "---\n---\n", "utf-8");
